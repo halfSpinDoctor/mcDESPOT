@@ -53,7 +53,7 @@
 // Debug Flag (Crashes PTHREAD Version)
 
 // Number of multithreads
-#define NUM_THREADS 4
+#define NUM_THREADS 1
 
 // Define maximum number of data points we can have,
 // in order to use constant memory effectively
