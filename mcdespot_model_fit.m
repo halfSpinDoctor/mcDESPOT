@@ -21,7 +21,7 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v4.3 27-Jan-2012
+% v5.0 5-Nov-2012
 %
 % Chagelog:
 %        v1.0 20-Oct-2009 - Initial Relase
@@ -37,6 +37,8 @@
 %                           Reverted from fminsearch back to Sean's algorithm.
 %        V4.4 27-Jan-2012 - Added FMINSEARCH as 2nd step in fitting, using
 %                           results from GaussianContraction as initial guess.
+%        V5.0  5-Nov-2012 - Updated to work with new cpMCDESPOT_residuals
+%                           re-factoring (Nov-2012)
 
 function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
 
@@ -121,8 +123,10 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     x = generatePoints(guess, NUM_RANDOM_WALKS*NUM_SAMPLES);
     
     % Compute residuals via CPU
-    [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(x', vox_omega, vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1);
-       
+    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
+    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
+    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_spgr_180, vox_alpha_ssfp, tr_ssfp, 1);
+    
 %     % DEBUG -- Equal To All 
 %     res = resSPGR + resSSFP_0 + resSSFP_180;
     
