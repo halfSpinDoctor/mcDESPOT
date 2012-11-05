@@ -1,30 +1,29 @@
 /***************************************************************************
- * MEXFUNCTION [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(fv, omega, data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, tefix)
+ * MEXFUNCTION res = cpMCDESPOT_residuals_SAH(fv, omega, phaseCycle, data, alpha, tr, model)
  *
  * CPU-BASED mcDESPOT OBJECTIVE FUNCTION (cpMCDESPOT)
  *
  * Inputs:
- *   fv = [T1m, T1f, T2m, T2f, MWF, Tau_m]
+ *   fv = [T1m, T1f, T2m, T2f, MWF, Tau_m] --> [Np Matrix x 7] Parameter Vectors, where N=nParam (number of parameter trials)
  *
  *   omega                                 --> Off-resonance [Hz]
- *                                         --> [Np Matrix x 7] Parameter Vectors, where N=nParam (number of parameter trials)
- *   data_spgr, data_ssfp_0 data_ssfp_180  --> [Np x 1] MRI Data, # of flip angles by 1  (NOTE: Divide out PD before fitting)
- *   alpha_spgr, alpha_ssfp                --> [scalar] Flip angles (corrected /w B1err) in degrees
- *   tr_spgr, tr_ssfp                      --> [scalar] TR times, in ms
- *   tefix                                 --> 0 = do not use sqrt(exp(TR/T2)) correction factor   1 = use correction factor
+ *   phaseCycle                            --> SSFP RF Pulse Phase Cycling (-1 = fitting SPGR)
+ *   data                                  --> [Np x 1] MRI Data, # of flip angles by 1  (NOTE: Divide out PD before fitting)
+ *   alpha                                 --> [scalar] Flip angles (corrected /w B1err) in degrees
+ *   tr                                    --> [scalar] TR times, in ms
+ *   model                                 --> 0=Standard 2-pool w/o sqrt(exp(TR/T2)) correction, 1=Standard 2-pool /w correction, 2=(2+1) Pool Model
  *
  * Outputs:
- *   resSPGR
- *   resSSFP_0
- *   resSSFP_180
+ *   res                                   --> SOS Residual
  *
  * Based on Sean Deoni's mcDESPOT C-Code, with additions from John Ollinger for matrix exponential
+ * Based on Deoni MRM 2012 Note on 3-Pool Model
  *
  * MATLAB COMPILE COMMAND (R2009b, GLNX): mex CFLAGS="\$CFLAGS -std=c99" -lm -lpthread cpMCDESPOT_residuals_SAH.c
  *
  * Samuel A. Hurley
  * University of Wisconsin
- * v4.4 20-Feb-2012
+ * v5.0 1-Nov-2012
  *
  * Changelog:
  *    v1.0 - initial code, based on gpMCDESPOT_residual
@@ -39,6 +38,8 @@
  *           Omega separated out into separate calibration scalar (Nov-2011)
  *    v4.3 - Adding multithreaded support (Dec-2011)
  *    v4.4 - Fixed p-threads bug if #of FV is not evenly divisible by NUM_THREADS (Feb-2012)
+ *    v5.0 - Drastically re-structured code. Added support for 3-pool model. Now only computes
+ *           a single residual at a time (based on ssfpPhase variable: -1 == SPGR) (Nov-2012)
  ***************************************************************************/
 
 /* Includes MEX for Matlab and Lib MATH headers */
@@ -54,10 +55,9 @@
 // Number of multithreads
 #define NUM_THREADS 4
 
-// Define maximum number of SPGR and SSFP data points we can have,
+// Define maximum number of data points we can have,
 // in order to use constant memory effectively
-#define MAX_ALPHA_SPGR 40
-#define MAX_ALPHA_SSFP 40
+#define MAX_ALPHA 10
 
 // Universal Constants
 #define PI         3.14159265358979323846264338327950288419716939937510
@@ -71,41 +71,28 @@
 // Create Thread Structure
 typedef struct {
   double **fv;
-  double *resSPGR;
-  double *resSSFP_0;
-  double *resSSFP_180;
+  double *res
   int    start_idx;     // Starting value of i
   int    end_idx;       // Ending   value of i
 } thread_arg;
 
 // ==== Global variables (for data shared between all fv evaluations) ====
 double d_omega[1];
-
-double d_data_spgr[MAX_ALPHA_SPGR];
-double d_data_ssfp_0[MAX_ALPHA_SSFP];
-double d_data_ssfp_180[MAX_ALPHA_SSFP];
-
-double d_alpha_spgr[MAX_ALPHA_SPGR];
-double d_alpha_ssfp[MAX_ALPHA_SSFP];
-
-double d_tr_spgr[1];
-double d_tr_ssfp[1];
-
-double d_tefix[1];
-
-int    d_nAlphaSPGR[1];
-int    d_nAlphaSSFP[1];
+double d_phaseCycle[1]; // Phase cycle is floating point
+double d_data[MAX_ALPHA];
+double d_tr[1];
+double d_model[1];      // Changed from tefix to model
+int    d_nAlpha[1];
 
 /* Main Function  ************************************************************/
 void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   
   /**** 0. Variable Declrations **********************************/
   int i;
-  int nParam, nAlphaSPGR, nAlphaSSFP;
+  int nParam, nAlpha;
   
   // Size of data vectors in memory
-  size_t spgrSize;
-  size_t ssfpSize;
+  size_t dataSize;
   
   // Number of threads for multithreading
   pthread_t  threads[NUM_THREADS];
@@ -115,25 +102,26 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   // Parameter vector
   double **fv;
   double  *omega;
+  double  *phaseCycle;
   
   // MR Data & Control Paramters (Defined as global vars above)
-  double *data_spgr,  *data_ssfp_0, *data_ssfp_180;
-  double *alpha_spgr, *alpha_ssfp;
-  double *tr_spgr,    *tr_ssfp;
-  double *tefix;
+  double *data;
+  double *alpha;
+  double *tr;
+  double *model;
   
   // Residual solutions
-  double *resSPGR, *resSSFP_0, *resSSFP_180;
+  double *res;
   
   /* I. Error checking ****************************************************************/
   
-  // Check for 10 inputs
-  if (nrhs != 10)
-    mexErrMsgTxt("Requires 10 inputs: [fv omega data_spgr data_ssfp_0 data_ssfp_180 alpha_spgr alpha_ssfp tr_spgr tr_ssfp tefix]");
+  // Check for 7 inputs
+  if (nrhs != 7)
+    mexErrMsgTxt("Requires 7 inputs: [fv omega phaseCycle data alpha tr model]");
   
-  // Check for 3 outputs
-  if (nlhs != 3)
-    mexErrMsgTxt("Requires three outputs [resSPGR resSSFP_0 resSSFP_180]");
+  // Check for 1 output
+  if (nlhs != 1)
+    mexErrMsgTxt("Requires one output [res]");
   
   // Check that input #1 is a [6 x N] matrix
   if (mxGetM(prhs[0]) != 6) {
@@ -141,7 +129,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   }
   
   // Check that all other inputs are Nx1 (single column)
-  for (i=1; i<9; i++) {
+  for (i=1; i<7; i++) {
    if (mxGetN(prhs[i]) > 1)
      mexErrMsgTxt("All inputs must be Nx1 (one column wide)");
   }
@@ -149,30 +137,20 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   // Grab nParam -- number of different paramter guesses
   nParam = mxGetN(prhs[0]);
   
-  // Grab the number of SPGR & SSFP flip angles
-  nAlphaSPGR = mxGetM(prhs[5]);
-  nAlphaSSFP = mxGetM(prhs[6]);
+  // Grab the number of SPGR/SSFP flip angles
+  nAlpha = mxGetM(prhs[4]);
   
-  // Check that the number of supplied flip angles matches
-  if (mxGetM(prhs[2]) != nAlphaSPGR)
-    mexErrMsgTxt("Number of supplied SPGR flip angles does not match number of SPGR data points");
-  
-  if (mxGetM(prhs[3]) != nAlphaSSFP)
-    mexErrMsgTxt("Number of supplied SSFP   0-phase flip angles does not match number of SSFP data points");
-  
-  if (mxGetM(prhs[4]) != nAlphaSSFP)
-    mexErrMsgTxt("Number of supplied SSFP 180-phase flip angles does not match number of SSFP data points");
+  // Check that the number of supplied flip angles matches the data
+  if (mxGetM(prhs[3]) != nAlphaSPGR)
+    mexErrMsgTxt("Number of supplied flip angles does not match number of data points");
   
   // Check that the TR's are scalars
-  if (mxGetN(prhs[7]) !=1 || mxGetM(prhs[7]) !=1)
-    mexErrMsgTxt("SPGR TR must be a scalar (in sec)");
-  
-  if (mxGetN(prhs[8]) !=1 || mxGetM(prhs[8]) !=1)
-    mexErrMsgTxt("SSFP TR must be a scalar (in sec)");
+  if (mxGetN(prhs[5]) !=1)
+    mexErrMsgTxt("TR must be a scalar (in sec)");
   
   // Check that tefix is a scalar
-  if (mxGetN(prhs[9]) !=1 || mxGetM(prhs[8]) !=1)
-    mexErrMsgTxt("tefix must be a scalar (0 or 1)");
+  if (mxGetN(prhs[6]) !=1)
+    mexErrMsgTxt("Model must be a scalar");
   
   /* II. Load In Data *******************************************************/
   
@@ -192,9 +170,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   plhs[2] = mxDuplicateArray(plhs[0]);
 
   // Grab pointers to output data
-  resSPGR     = mxGetPr(plhs[0]);
-  resSSFP_0   = mxGetPr(plhs[1]);
-  resSSFP_180 = mxGetPr(plhs[2]);
+  res     = mxGetPr(plhs[0]);
 
   // Size of SPGR & SSFP Data
   spgrSize = sizeof(double)*nAlphaSPGR;
