@@ -173,8 +173,8 @@ if SMOOTH == 1
 end
 
 % Display masked slices that will be used for processing
-imgsc(data_spgr(:,:,:,end));
-title 'Images to Process';
+% imgsc(data_spgr(:,:,:,end));
+% title 'Images to Process';
 
 %% Save the run status before processing begins
 status.comment                     = 'Standard mcDESPOT Processing'; %#ok<VCAT>
