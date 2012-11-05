@@ -53,7 +53,7 @@
 // Debug Flag (Crashes PTHREAD Version)
 
 // Number of multithreads
-#define NUM_THREADS 4
+#define NUM_THREADS 1
 
 // Define maximum number of data points we can have,
 // in order to use constant memory effectively
@@ -71,17 +71,18 @@
 // Create Thread Structure
 typedef struct {
   double **fv;
-  double *res
+  double *res;
   int    start_idx;     // Starting value of i
   int    end_idx;       // Ending   value of i
 } thread_arg;
 
 // ==== Global variables (for data shared between all fv evaluations) ====
 double d_omega[1];
-double d_phaseCycle[1]; // Phase cycle is floating point
+double d_phaseCycle[1];   // Note phase cycle is floating point
 double d_data[MAX_ALPHA];
+double d_alpha[MAX_ALPHA];
 double d_tr[1];
-double d_model[1];      // Changed from tefix to model
+double d_model[1];        // Changed from tefix to model
 int    d_nAlpha[1];
 
 /* Main Function  ************************************************************/
@@ -141,7 +142,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   nAlpha = mxGetM(prhs[4]);
   
   // Check that the number of supplied flip angles matches the data
-  if (mxGetM(prhs[3]) != nAlphaSPGR)
+  if (mxGetM(prhs[3]) != nAlpha)
     mexErrMsgTxt("Number of supplied flip angles does not match number of data points");
   
   // Check that the TR's are scalars
@@ -165,69 +166,45 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetM(plhs[0],    nParam);
   mxSetN(plhs[0],    1);
   mxSetData(plhs[0], mxMalloc(sizeof(double)*nParam));
-  
-  plhs[1] = mxDuplicateArray(plhs[0]);
-  plhs[2] = mxDuplicateArray(plhs[0]);
 
   // Grab pointers to output data
   res     = mxGetPr(plhs[0]);
 
-  // Size of SPGR & SSFP Data
-  spgrSize = sizeof(double)*nAlphaSPGR;
-  ssfpSize = sizeof(double)*nAlphaSSFP;
+  // Size of SPGR/SSFP Data
+  dataSize = sizeof(double)*nAlpha;
   
   // Load in parameter data matrix
   load_mrhs(fv, 0, prhs);
   
-  // Load in omega calibration
+  // Load in omega & rf phase calibration
   omega         = mxGetPr(prhs[1]);
+  phaseCycle    = mxGetPr(prhs[2]);
   
   // Load in MRI data
-  data_spgr     = mxGetPr(prhs[2]);
-  data_ssfp_0   = mxGetPr(prhs[3]);
-  data_ssfp_180 = mxGetPr(prhs[4]);
-  alpha_spgr    = mxGetPr(prhs[5]);
-  alpha_ssfp    = mxGetPr(prhs[6]);
-  tr_spgr       = mxGetPr(prhs[7]);
-  tr_ssfp       = mxGetPr(prhs[8]);
+  data          = mxGetPr(prhs[3]);
   
-  // Load in tefix option
-  tefix         = mxGetPr(prhs[9]);
+  // Load in Model Option
+  model         = mxGetPr(prhs[6]);
   
-  if (!(tefix[0] == 0.0 || tefix[0] == 1.0)) {
-    mexErrMsgTxt("Error: tefix must be 0 or 1");
+  if (!(model[0] == 0.0 || model[0] == 1.0 || model[0] == 2.0)) {
+    mexErrMsgTxt("Error: model must be 0/1/2 (2-pool, 2-pool /w TE correction, 2+1 pool)");
   }
   
   // Check that the size of spgr/ssfp data are not larger than the hard-coded maxima
-  if (spgrSize > sizeof(double)*MAX_ALPHA_SPGR) {
-    mexErrMsgTxt("Error: This algorithm has a hard-coded limit of 40 SPGR data points, and you used too many!\nDo not panic, the authorities are on their way...");
+  if (dataSize > sizeof(double)*MAX_ALPHA) {
+    mexErrMsgTxt("Error: This algorithm has a hard-coded limit of data points, and you used too many!\nDo not panic, the authorities are on their way...");
   }
   
-  if (ssfpSize > sizeof(double)*MAX_ALPHA_SSFP) {
-    mexErrMsgTxt("Error: This algorithm has a hard-coded limit of 40 SSFP data points, and you used too many!\nDo not panic, the authorities are on their way...");
-  }
+  // Copy local variables into global variables (CUDA copy host->global device)
+  d_omega[0]      = (double) omega[0];
+  d_phaseCycle[0] = (double) phaseCycle[0]; 
+  d_tr[0]         = (double) tr[0];
+  d_model[0]      = (double) model[0];
+  d_nAlpha[0]     = nAlpha;
   
-  // Copy SSFP & SPGR data into global memory
-  
-  d_nAlphaSPGR[0] = nAlphaSPGR;
-  d_nAlphaSSFP[0] = nAlphaSSFP;
-  
-  d_omega[0]   = (double) omega[0];
-  
-  d_tr_spgr[0] = (double) tr_spgr[0];
-  d_tr_ssfp[0] = (double) tr_ssfp[0];
-  
-  d_tefix[0]   = (double) tefix[0];
-  
-  for (i=0; i<nAlphaSPGR; i++) {
-    d_data_spgr[i]  = data_spgr[i];
-    d_alpha_spgr[i] = alpha_spgr[i];
-  }
-  
-  for (i=0; i<nAlphaSSFP; i++) {
-    d_data_ssfp_0[i]   = data_ssfp_0[i];
-    d_data_ssfp_180[i] = data_ssfp_180[i];
-    d_alpha_ssfp[i]    = alpha_ssfp[i];
+  for (i=0; i<nAlpha; i++) {
+    d_data[i]  = data[i];
+    d_alpha[i] = alpha[i];
   }
   
   /* III. Compute Residuals *****************************************************/
@@ -243,16 +220,14 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   
   // Create all Threads
   for (i=0; i<NUM_THREADS; i++) {
-    targ[i].fv           = fv;
-    targ[i].resSPGR      = resSPGR;
-    targ[i].resSSFP_0    = resSSFP_0;
-    targ[i].resSSFP_180  = resSSFP_180;
-    targ[i].start_idx    = i*chunkSize;
+    targ[i].fv        = fv;
+    targ[i].res       = res;
+    targ[i].start_idx = i*chunkSize;
     
     if (i == (NUM_THREADS-1)) {
-      targ[i].end_idx    = nParam;
+      targ[i].end_idx = nParam;
     } else {
-      targ[i].end_idx    = (i+1)*chunkSize;
+      targ[i].end_idx = (i+1)*chunkSize;
     }
     
     pthread_create(&threads[i], NULL, threadFunc, (void *) &targ[i]);
@@ -280,15 +255,23 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 // Thread Function
 void *threadFunc(void *arg) {
   thread_arg *targ = (thread_arg *) arg;
-  double **fv             = targ->fv;
-  double *resSPGR         = targ->resSPGR;
-  double *resSSFP_0       = targ->resSSFP_0;
-  double *resSSFP_180     = targ->resSSFP_180;
+  double **fv      = targ->fv;
+  double *res      = targ->res;
 
   for (int i=targ->start_idx; i<targ->end_idx; i++) {
-    calcSPGR(fv[i], &resSPGR[i]);
-    calcSSFP(fv[i], &resSSFP_0[i],   0);
-    calcSSFP(fv[i], &resSSFP_180[i], PI);
+    
+    // If phaseCycle is (-1), compute SPGR
+    if (d_phaseCycle[0] == -1) {
+      #ifdef DEBUG_FLAG
+        mexPrintf("Computing SPGR");
+      #endif
+      calcSPGR(fv[i], &res[i]);
+    } else {
+      #ifdef DEBUG_FLAG
+        mexPrintf("Computing SSFP");
+      #endif
+      calcSSFP(fv[i], &res[i], d_phaseCycle[0]*DEG_TO_RAD);
+    }
   }
 }
 
@@ -315,7 +298,7 @@ void calcSPGR(double* d_fv, double* d_resSPGR) {
   
   // Compute 2x2 exponential of A*TR
   double expATR[2][2];
-  matrixExponential(d_tr_spgr[0], T1m, T1f, Kmf, Kfm, MWF, expATR);
+  matrixExponential(d_tr[0], T1m, T1f, Kmf, Kfm, MWF, expATR);
   
   #ifdef DEBUG_FLAG
     mexPrintf("exp(A*TR) \n");
@@ -357,14 +340,14 @@ void calcSPGR(double* d_fv, double* d_resSPGR) {
   d_resSPGR[0] = 0.00;
   
   /******************Loop Over Each Flip Angle & Compute SPGR Signal*************/
-	for (flipAngle=0; flipAngle<d_nAlphaSPGR[0]; flipAngle++) {
+	for (flipAngle=0; flipAngle<d_nAlpha[0]; flipAngle++) {
     
     // Pre-compute sin & cos, & convert DEG -> RAD
-    sina = sin(d_alpha_spgr[flipAngle] * DEG_TO_RAD);
-    cosa = cos(d_alpha_spgr[flipAngle] * DEG_TO_RAD);
+    sina = sin(d_alpha[flipAngle] * DEG_TO_RAD);
+    cosa = cos(d_alpha[flipAngle] * DEG_TO_RAD);
     
     #ifdef DEBUG_FLAG
-      mexPrintf("FlipAngle: %05f degrees \n", d_alpha_spgr[flipAngle]);
+      mexPrintf("FlipAngle: %05f degrees \n", d_alpha[flipAngle]);
     #endif
     
     // (I2 - expm(A*TR)*cos(alpha))
@@ -405,7 +388,7 @@ void calcSPGR(double* d_fv, double* d_resSPGR) {
     
     // Finally, observed signal is just sum of matrixProduct2[0] and matrixProduct2[1]
     // Take difference from input MRI data, square, and add to SOS residual
-    d_resSPGR[0] += ((matrixProduct2[0] + matrixProduct2[1]) - d_data_spgr[flipAngle]) * ((matrixProduct2[0] + matrixProduct2[1]) - d_data_spgr[flipAngle]);
+    d_resSPGR[0] += ((matrixProduct2[0] + matrixProduct2[1]) - d_data[flipAngle]) * ((matrixProduct2[0] + matrixProduct2[1]) - d_data[flipAngle]);
     
 	}// </LoopOverFA>
   
@@ -445,12 +428,12 @@ void calcSSFP(double* fv, double* d_resSSFP, double rfPulsePhase) {
   // Compute Exponential of Aupper and Alower
   double expAupper[2][2];
   double expAlower[2][2];
-  matrixExponential(d_tr_ssfp[0], T2m, T2f, Kmf, Kfm, MWF, expAupper);
-  matrixExponential(d_tr_ssfp[0], T1m, T1f, Kmf, Kfm, MWF, expAlower);
+  matrixExponential(d_tr[0], T2m, T2f, Kmf, Kfm, MWF, expAupper);
+  matrixExponential(d_tr[0], T1m, T1f, Kmf, Kfm, MWF, expAlower);
   
   // Compute the exponential of W
   double expW[6][6];
-  double beta = Omega*2*PI*d_tr_ssfp[0] + rfPulsePhase;  //Units of radians, therefore convert Omega from Hz -> rad/s
+  double beta = Omega*2*PI*d_tr[0] + rfPulsePhase;  //Units of radians, therefore convert Omega from Hz -> rad/s
   double sinb = sin(beta);
   double cosb = cos(beta);
   
@@ -570,14 +553,14 @@ void calcSSFP(double* fv, double* d_resSSFP, double rfPulsePhase) {
   d_resSSFP[0] = 0;
   
   /******************Loop Over Each Flip Angle & Compute SSFP Signal*************/
-	for (flipAngle=0; flipAngle<d_nAlphaSSFP[0]; flipAngle++) {
+	for (flipAngle=0; flipAngle<d_nAlpha[0]; flipAngle++) {
     
     // Pre-compute sin & cos, and convert DEG -> RAD
-    sina = sin(d_alpha_ssfp[flipAngle] * DEG_TO_RAD);
-    cosa = cos(d_alpha_ssfp[flipAngle] * DEG_TO_RAD);
+    sina = sin(d_alpha[flipAngle] * DEG_TO_RAD);
+    cosa = cos(d_alpha[flipAngle] * DEG_TO_RAD);
     
     #ifdef DEBUG_FLAG
-      mexPrintf("FlipAngle: %05f degrees \n", d_alpha_spgr[flipAngle]);
+      mexPrintf("FlipAngle: %05f degrees \n", d_alpha[flipAngle]);
     #endif
     
     // Fill Out the R Rotation Matrix
@@ -636,13 +619,13 @@ void calcSSFP(double* fv, double* d_resSSFP, double rfPulsePhase) {
       debugPrint6by1(matrixProduct2);
     #endif
              
-    if (d_tefix[0] == 0.0) {
+    if (d_model[0] == 0.0) {
       // Compute Observed Signal
       signalSSFP = sqrt(matrixProduct2[0]*matrixProduct2[0] + matrixProduct2[2]*matrixProduct2[2]) + sqrt(matrixProduct2[1]*matrixProduct2[1] + matrixProduct2[3]*matrixProduct2[3]);
       
     } else {
       // Multiply on an extra sqrt(E2) term to account for center-echo readout
-      signalSSFP = sqrt(matrixProduct2[0]*matrixProduct2[0] + matrixProduct2[2]*matrixProduct2[2]) * sqrt(exp(d_tr_ssfp[0]/T2m)) + sqrt(matrixProduct2[1]*matrixProduct2[1] + matrixProduct2[3]*matrixProduct2[3]) * sqrt(exp(d_tr_ssfp[0]/T2f));
+      signalSSFP = sqrt(matrixProduct2[0]*matrixProduct2[0] + matrixProduct2[2]*matrixProduct2[2]) * sqrt(exp(d_tr[0]/T2m)) + sqrt(matrixProduct2[1]*matrixProduct2[1] + matrixProduct2[3]*matrixProduct2[3]) * sqrt(exp(d_tr[0]/T2f));
     }
     
     #ifdef DEBUG_FLAG
@@ -651,13 +634,7 @@ void calcSSFP(double* fv, double* d_resSSFP, double rfPulsePhase) {
     
     // Finally, observed signal is just sum of matrixProduct2[0] and matrixProduct2[1]
     // Take difference from input MRI data, square, and add to SOS residual
-    // Choose correct dataset depending if RF Phase cycling (chop) is 0 or PI
-    if (rfPulsePhase == 0) {
-      d_resSSFP[0] += (signalSSFP - d_data_ssfp_0[flipAngle])   * (signalSSFP - d_data_ssfp_0[flipAngle]);
-    }
-    else {
-      d_resSSFP[0] += (signalSSFP - d_data_ssfp_180[flipAngle]) * (signalSSFP - d_data_ssfp_180[flipAngle]);
-    }
+    d_resSSFP[0] += (signalSSFP - d_data[flipAngle]) * (signalSSFP - d_data[flipAngle]);
     
 	}// </LoopOverFA>
   
