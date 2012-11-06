@@ -24,7 +24,7 @@
 %       v1.0 Initial Version, Jun-2010
 %       v4.0 Fixed Documentation, added gaussian noise
 
-function [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot_c2(fv, alpha, tr_spgr, tr_ssfp, snr)
+function [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot_c(fv, alpha, tr_spgr, tr_ssfp, snr)
 
 % Preallocate some stuff
 s_spgr     = zeros([1 length(alpha)]);
@@ -34,11 +34,12 @@ s_ssfp_180 = zeros([1 length(alpha)]);
 % Loop over flip angles
 for ii = 1:length(alpha)
   % For Sam's c-code, only 3 outputs & FV is now a matrix, not a set of vectors
-  [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(fv(1:7), 0, 0, 0, alpha(ii), alpha(ii), tr_spgr, tr_ssfp, 1); 
+  % [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(fv(1:7), 0, 0, 0, alpha(ii), alpha(ii), tr_spgr, tr_ssfp, 1); 
+  
   % Extract signals from the residual
-  s_spgr(ii) = sqrt(resSPGR);
-  s_ssfp_0(ii) = sqrt(resSSFP_0);
-  s_ssfp_180(ii) = sqrt(resSSFP_180);
+  s_spgr(ii)     = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7), -1,   0, alpha(ii), tr_spgr, 1));
+  s_ssfp_0(ii)   = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7),  0,   0, alpha(ii), tr_ssfp, 1));
+  s_ssfp_0(ii)   = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7),  180, 0, alpha(ii), tr_ssfp, 1));
 end
 
 % Add Noise Gaussian Random Noise

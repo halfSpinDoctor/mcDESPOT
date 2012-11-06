@@ -53,7 +53,8 @@ for ii = 1:length(omega)
   title 'Signal Curves: M-C Code';
   
   pause(.250);
-end
+  
+  savefig(['mcDESPOT_CvsM_Omega ' num2str(omega(ii), '02.0%f') '.tif']);
 
-% saveas(gcf, 'mcDESPOT_C_vs_M_Test.tif');
+end
 
