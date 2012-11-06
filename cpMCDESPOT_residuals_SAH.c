@@ -53,7 +53,7 @@
 // Debug Flag (Crashes PTHREAD Version)
 
 // Number of multithreads
-#define NUM_THREADS 1
+#define NUM_THREADS 2
 
 // Define maximum number of data points we can have,
 // in order to use constant memory effectively
@@ -77,13 +77,14 @@ typedef struct {
 } thread_arg;
 
 // ==== Global variables (for data shared between all fv evaluations) ====
+int    d_nAlpha[1];
+
 double d_omega[1];
 double d_phaseCycle[1];   // Note phase cycle is floating point
 double d_data[MAX_ALPHA];
 double d_alpha[MAX_ALPHA];
 double d_tr[1];
 double d_model[1];        // Changed from tefix to model
-int    d_nAlpha[1];
 
 /* Main Function  ************************************************************/
 void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
@@ -108,6 +109,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   // MR Data & Control Paramters (Defined as global vars above)
   double *data;
   double *alpha;
+  
   double *tr;
   double *model;
   
@@ -176,21 +178,20 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   // Load in parameter data matrix
   load_mrhs(fv, 0, prhs);
   
-  // Load in omega & rf phase calibration
+  // Load MRI Data and Control Parameters
   omega         = mxGetPr(prhs[1]);
   phaseCycle    = mxGetPr(prhs[2]);
-  
-  // Load in MRI data
   data          = mxGetPr(prhs[3]);
-  
-  // Load in Model Option
+  alpha         = mxGetPr(prhs[4]);
+  tr            = mxGetPr(prhs[5]);
   model         = mxGetPr(prhs[6]);
   
+  // Check Model
   if (!(model[0] == 0.0 || model[0] == 1.0 || model[0] == 2.0)) {
     mexErrMsgTxt("Error: model must be 0/1/2 (2-pool, 2-pool /w TE correction, 2+1 pool)");
   }
   
-  // Check that the size of spgr/ssfp data are not larger than the hard-coded maxima
+  // Check Data Size
   if (dataSize > sizeof(double)*MAX_ALPHA) {
     mexErrMsgTxt("Error: This algorithm has a hard-coded limit of data points, and you used too many!\nDo not panic, the authorities are on their way...");
   }
