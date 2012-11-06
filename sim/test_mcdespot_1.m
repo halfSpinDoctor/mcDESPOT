@@ -30,13 +30,16 @@ t2_f = .117;
 
 MWF  = .20;
 tau  = 0.200; % Lit value quoted in Lenz & Scheffler
-omega = 0:1:200;    % Perfectly on-resonance
+% omega = 0:1:200;    % Perfectly on-resonance
+
+omega = 80; % Hz
 
 for ii = 1:length(omega)
   fv = [t1_m t1_f t2_m t2_f MWF tau omega(ii) pd_spgr pd_ssfp];
   
-  [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_m(fv, alpha, tr_spgr, tr_ssfp, SNR);
-  [c_spgr c_ssfp_0 c_ssfp_180] = sim_mcdespot_c(fv, alpha, tr_spgr, tr_ssfp, SNR);
+  % [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_m(fv, alpha, tr_spgr, tr_ssfp, SNR);
+  [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_bloch(fv, alpha, tr_spgr, tr_ssfp, 2.4e-14);
+  [c_spgr c_ssfp_0 c_ssfp_180] = sim_mcdespot_c(    fv, alpha, tr_spgr, tr_ssfp, SNR);
   
   subplot(1,2,1);
   plot(alpha, m_spgr, alpha, m_ssfp_0, alpha, m_ssfp_180, alpha, c_spgr, alpha, c_ssfp_0, alpha, c_ssfp_180);
@@ -53,8 +56,10 @@ for ii = 1:length(omega)
   title 'Signal Curves: M-C Code';
   
   pause(.250);
-  
-  savefig(['mcDESPOT_CvsM_Omega ' num2str(omega(ii), '02.0%f') '.tif']);
 
 end
 
+savefig('/Users/samuel/Dropbox/Fig.png');
+
+NOTIFY_EMAIL = '2628943063@email.uscc.net'; 
+send_mail_message(NOTIFY_EMAIL, 'ProcDone', ['Processing Complete at ' datetime()]);

@@ -25,7 +25,7 @@
 %       v1.0 Initial Version, Jun-2010
 %       v4.0 Fixed Documentation, added gaussian noise
 
-function [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot_c(fv, alpha, tr_spgr, tr_ssfp, snr)
+function [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot_c2(fv, alpha, tr_spgr, tr_ssfp, snr)
 
 % Preallocate some stuff
 s_spgr     = zeros([1 length(alpha)]);
