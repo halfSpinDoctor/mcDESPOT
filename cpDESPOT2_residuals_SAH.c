@@ -1,15 +1,15 @@
 /***************************************************************************
- * MEXFUNCTION [res] = despot2_residual_SAH(fv, data_ssfp_0, data_ssfp_180, alpha, tr, tefix)
+ * MEXFUNCTION [res] = despot2_residual_SAH(fv, phaseCycle, data_ssfp, alpha, tr, tefix)
  *
  * CPU-BASED DESPOT2-FM Objective Function
  *
  * Inputs:
- *   fv = [PD T1 T2 Omega]
- *                                    --> [Np Matrix x 4] Parameter Vectors, where N=nParam (number of parameter trials)
- *   data_ssfp_0 data_ssfp_180        --> [Np x 1] MRI Data, # of flip angles by 1
- *   alpha_spgr, alpha_ssfp           --> [scalar] Flip angles (corrected /w fam) in degrees
- *   tr_spgr, tr_ssfp                 --> [scalar] TR times, in ms
- *   tefix                            --> [scalar] 0 = do not use sqrt(exp(-TR/T2)) correction factor   1 = use correction factor
+ *   fv = [PD T1 T2 Omega]      --> [Np Matrix x 4] Parameter Vectors, where N=nParam (number of parameter trials)
+ *   phaseCycle                 --> [scalar] Phase cycle increment of SSFP 
+ *   data_ssfp                  --> [Np x 1] MRI Data, # of flip angles by 1
+ *   alpha_spgr, alpha_ssfp     --> [scalar] Flip angles (corrected /w fam) in degrees
+ *   tr_ssfp                    --> [scalar] TR times, in ms
+ *   tefix                      --> [scalar] 0 = do not use sqrt(exp(-TR/T2)) correction factor   1 = use correction factor
  *
  * Outputs:
  *   res
@@ -20,11 +20,12 @@
  *
  * Samuel A. Hurley
  * University of Wisconsin
- * v1.1 29-Jun-2011
+ * v2.0 10-Nov-2012
  *
  * Changelog:
  *    v1.0 - initial code, based on cpMCDESPOT_residuals_SAH.c
  *    v1.1 - fixed missing sqrt() in the tefix portion of the code (Jun-2011) 
+ *    v2.0 - Refactor to allow arbitrary SSFP phase cycle to be selected
  ***************************************************************************/
 
 /* Includes MEX for Matlab and Lib MATH headers */
@@ -49,13 +50,10 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
 // ==== Global variables (for data shared between all fv evaluations) ====
-double d_data_ssfp_0[MAX_ALPHA_SSFP];
-double d_data_ssfp_180[MAX_ALPHA_SSFP];
-
+double d_phaseCycle[1];
+double d_data_ssfp[MAX_ALPHA_SSFP];
 double d_alpha_ssfp[MAX_ALPHA_SSFP];
-
 double d_tr_ssfp[1];
-
 double d_tefix[1];
 
 int    d_nAlphaSSFP[1];
@@ -76,7 +74,8 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   double **fv;
   
   // MR Data & Control Paramters (Defined as global vars above)
-  double *data_ssfp_0, *data_ssfp_180;
+  double *phaseCycle;
+  double *data_ssfp;
   double *alpha_ssfp;
   double *tr_ssfp;
   double *tefix;
@@ -88,7 +87,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   
   // Check for 6 inputs
   if (nrhs != 6)
-    mexErrMsgTxt("Requires 6 inputs: [fv data_ssfp_0  data_ssfp_180 alpha_ssfp tr_ssfp tefix]");
+    mexErrMsgTxt("Requires 6 inputs: [fv phaseCycle data_ssfp alpha_ssfp tr_ssfp tefix]");
   
   // Check for 1 outputs
   if (nlhs != 1)
@@ -112,15 +111,16 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   nAlphaSSFP = mxGetM(prhs[3]);            // prhs[3] is alpha_ssfp
   
   // Check that the number of supplied flip angles matches
-  if (mxGetM(prhs[1]) != nAlphaSSFP)
-    mexErrMsgTxt("Number of supplied SSFP   0-phase flip angles does not match number of SSFP data points");
-  
   if (mxGetM(prhs[2]) != nAlphaSSFP)
-    mexErrMsgTxt("Number of supplied SSFP 180-phase flip angles does not match number of SSFP data points");
+    
+    mexErrMsgTxt("Number of supplied SSFP flip angles does not match number of SSFP data points");
   
-  // Check that the TR's are scalars
+  // Check that the TR and phasCycle are sca
+  if (mxGetN(prhs[1]) !=1 || mxGetM(prhs[1]) !=1)
+    mexErrMsgTxt("phaseCycle must be a scalar (in degrees)");
+  
   if (mxGetN(prhs[4]) !=1 || mxGetM(prhs[4]) !=1)
-    mexErrMsgTxt("SSFP flip angle and TR must be a scalar (in sec)");
+    mexErrMsgTxt("TR must be a scalar (in sec)");
   
   // Check that tefix is a scalar
   if (mxGetN(prhs[5]) !=1 || mxGetM(prhs[5]) !=1)
@@ -153,12 +153,10 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   load_mrhs(fv, 0, prhs);
   
   // Load in MRI data
-  data_ssfp_0   = mxGetPr(prhs[1]);
-  data_ssfp_180 = mxGetPr(prhs[2]);
+  phaseCycle    = mxGetPr(prhs[1]);
+  data_ssfp     = mxGetPr(prhs[2]);
   alpha_ssfp    = mxGetPr(prhs[3]);
   tr_ssfp       = mxGetPr(prhs[4]);
-  
-  // Load in tefix option
   tefix         = mxGetPr(prhs[5]);
   
   if (!(tefix[0] == 0.0 || tefix[0] == 1.0)) {
@@ -172,13 +170,13 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   
   // Copy SSFP data into constant memory 
   d_nAlphaSSFP[0] = nAlphaSSFP;
-  d_tr_ssfp[0] = (double) tr_ssfp[0];
-  d_tefix[0]   = (double) tefix[0];
+  d_phaseCycle    = (double) phaseCycle[0];
+  d_tr_ssfp[0]    = (double) tr_ssfp[0];
+  d_tefix[0]      = (double) tefix[0];
   
   for (i=0; i<nAlphaSSFP; i++) {
-    d_data_ssfp_0[i]   = data_ssfp_0[i];
-    d_data_ssfp_180[i] = data_ssfp_180[i];
-    d_alpha_ssfp[i]    = alpha_ssfp[i];
+    d_data_ssfp[i]  = data_ssfp[i];
+    d_alpha_ssfp[i] = alpha_ssfp[i];
   }
   
   /* III. Compute Residuals *****************************************************/
@@ -211,8 +209,7 @@ void calcDESPOT2(double* d_fv, double* d_res) {
   int i, j;
   double sina[MAX_ALPHA_SSFP];
   double cosa[MAX_ALPHA_SSFP];
-  double ssfp_180[MAX_ALPHA_SSFP];
-  double ssfp_0[MAX_ALPHA_SSFP];
+  double ssfp_signal[MAX_ALPHA_SSFP];
   double Mx, My;
   double sinb, cosb, beta, denom;
   
@@ -232,8 +229,8 @@ void calcDESPOT2(double* d_fv, double* d_res) {
     cosa[i]    = cos(d_alpha_ssfp[i]);
   }
   
-  // SSFP-180 Signals
-  beta  = Omega*2*PI*d_tr_ssfp[0] + PI;
+  // SSFP Signals
+  beta  = Omega*2*PI*d_tr_ssfp[0] + (d_phaseCycle[0]*DEG_TO_RAD);
   
   sinb = sin(beta);
   cosb = cos(beta);
@@ -246,34 +243,18 @@ void calcDESPOT2(double* d_fv, double* d_res) {
      
     if (d_tefix[0] == 1) {
       // With extra sqrt(E2) term to account for center-echo readout
-      ssfp_180[i] = sqrt(Mx*Mx + My*My) * sqrt(exp(d_tr_ssfp[0]/T2));
+      ssfp_signal[i] = sqrt(Mx*Mx + My*My) * sqrt(exp(d_tr_ssfp[0]/T2));
        
     } else {
       // Standard Freeman-Hill Formula
-      ssfp_180[i] = sqrt(Mx*Mx + My*My);
+      ssfp_signal[i] = sqrt(Mx*Mx + My*My);
     }
-  }
-  
-  // SSFP-0 Signals
-  beta  = Omega*2*PI*d_tr_ssfp[0];
-  
-  sinb = sin(beta);
-  cosb = cos(beta);
-  
-  for (i=0; i<d_nAlphaSSFP[0]; i++) {
-     denom  = (1-E1*cosa[i]) * (1-E2*cosb) - E2*(E1-cosa[i])*(E2-cosb);
-    
-     Mx = PD * ((1-E1) * E2 * sina[i] * sinb)      / denom;
-     My = PD * ((1-E1) * E2 * sina[i] * (cosb-E2)) / denom;
-     
-     ssfp_0[i] = sqrt(Mx*Mx + My*My) * sqrt(exp(d_tr_ssfp[0]/T2));
   }
   
   // Compute Residual
   d_res[0] = 0.0;
   for (i=0; i<d_nAlphaSSFP[0]; i++) {
-     d_res[0] += pow(ssfp_0[i]   - d_data_ssfp_0[i],   2.0);
-     d_res[0] += pow(ssfp_180[i] - d_data_ssfp_180[i], 2.0);
+     d_res[0] += pow(ssfp_signal[i]   - d_data_ssfp[i],   2.0);
   }
   
   return;

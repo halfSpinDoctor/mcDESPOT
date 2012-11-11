@@ -39,7 +39,7 @@ for ii = 1:length(alpha)
   % Extract signals from the residual
   s_spgr(ii)     = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7), -1,   0, alpha(ii), tr_spgr, 1));
   s_ssfp_0(ii)   = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7),  0,   0, alpha(ii), tr_ssfp, 1));
-  s_ssfp_0(ii)   = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7),  180, 0, alpha(ii), tr_ssfp, 1));
+  s_ssfp_180(ii) = sqrt(cpMCDESPOT_residuals_SAH(fv(1:6)', fv(7),  180, 0, alpha(ii), tr_ssfp, 1));
 end
 
 % Add Noise Gaussian Random Noise

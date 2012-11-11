@@ -38,7 +38,7 @@ for ii = 1:length(omega)
   fv = [t1_m t1_f t2_m t2_f MWF tau omega(ii) pd_spgr pd_ssfp];
   
   % [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_m(fv, alpha, tr_spgr, tr_ssfp, SNR);
-  [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_bloch(fv, alpha, tr_spgr, tr_ssfp, 2.4e-14);
+  [m_spgr m_ssfp_0 m_ssfp_180] = sim_mcdespot_bloch_2(fv, alpha, tr_spgr, tr_ssfp, 1e-6);
   [c_spgr c_ssfp_0 c_ssfp_180] = sim_mcdespot_c(    fv, alpha, tr_spgr, tr_ssfp, SNR);
   
   subplot(1,2,1);
@@ -59,7 +59,7 @@ for ii = 1:length(omega)
 
 end
 
-savefig('/Users/samuel/Dropbox/Fig.png');
-
-NOTIFY_EMAIL = '2628943063@email.uscc.net'; 
-send_mail_message(NOTIFY_EMAIL, 'ProcDone', ['Processing Complete at ' datetime()]);
+% savefig('/Users/samuel/Dropbox/Fig.png');
+% 
+% NOTIFY_EMAIL = '2628943063@email.uscc.net'; 
+% send_mail_message(NOTIFY_EMAIL, 'ProcDone', ['Processing Complete at ' datetime()]);

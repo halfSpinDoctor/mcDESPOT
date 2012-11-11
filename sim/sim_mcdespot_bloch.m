@@ -178,7 +178,7 @@ for ii = 1:length(alpha)
     M = M2(end, :)';
     
     % !! READOUT AT END OF TR !!
-    % Signal is abs(Mxy) at TE = TR/2
+    % Signal is abs(Mxy) at TE = TR
     S_Prev = S;
     S = abs(M(1) + M(2) + 1i*M(3) + 1i*M(4));
     
@@ -261,7 +261,7 @@ for ii = 1:length(alpha)
     M = M2(end, :)';
     
     % !! Readout at the end of the TR !!
-    % Signal is abs(Mxy) at TE = TR/2
+    % Signal is abs(Mxy) at TE = TR
     S_Prev = S;
     S = abs(M(1) + M(2) + 1i*M(3) + 1i*M(4));
     
