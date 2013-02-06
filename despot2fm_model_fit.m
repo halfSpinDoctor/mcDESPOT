@@ -30,7 +30,7 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v2.4 18-Jan-2012
+% v5.0 14-Nov-2012
 %
 % Chagelog:
 %      v1.0 - Initial version based on despot1hifi_model_fit     (Feb-2011)
@@ -41,6 +41,7 @@
 %      v2.3 - Input PD initial guess from DESPOT1. Use R1 to formulate T2
 %             initial guess based on Vasily constraints. (Nov-2011)
 %      v2.4 - Removed unused GA stuff, updated pd initial guess for ext. supplied B0 map (Jan-2012)
+%      v5.0 - Update to be compatible /w new cpDESPOT2 C-Code (Nov-2012)
 
 function [pd r2 omega rnrm] = despot2fm_model_fit(data_0, data_180, alpha, tr, r1, pd_despot1, fam, opts)
 
@@ -239,7 +240,8 @@ toc;
     end
     
     % Call C-Code
-    res = cpDESPOT2_residuals_SAH(fv, vox_data_0', vox_data_180', vox_alpha', tr, 1)';
+    res =       cpDESPOT2_residuals_SAH(fv, 0,   vox_data_0',   vox_alpha', tr, 1)';
+    res = res + cpDESPOT2_residuals_SAH(fv, 180, vox_data_180', vox_alpha', tr, 1)';
 
   end
 
@@ -292,3 +294,4 @@ toc;
   end
 
 end
+

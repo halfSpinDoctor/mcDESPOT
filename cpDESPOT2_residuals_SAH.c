@@ -168,9 +168,10 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     mexErrMsgTxt("Error: This algorithm has a hard-coded limit of 40 SSFP data points, and you used too many!\nDo not panic, the authorities are on their way...");
   }
   
+  
   // Copy SSFP data into constant memory 
   d_nAlphaSSFP[0] = nAlphaSSFP;
-  d_phaseCycle    = (double) phaseCycle[0];
+  d_phaseCycle[0] = phaseCycle[0];
   d_tr_ssfp[0]    = (double) tr_ssfp[0];
   d_tefix[0]      = (double) tefix[0];
   

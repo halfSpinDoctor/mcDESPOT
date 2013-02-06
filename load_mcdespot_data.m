@@ -6,7 +6,7 @@
 % Matlab processing.
 %
 % Inputs
-%    dirnames - Path to DICOM files: SPGR, IR-SPGR, SSFP-180, SSFP-0
+%    dirnames - Path to DICOM files: SPGR, IR-SPGR/AFI, SSFP-180, SSFP-0
 %    flipset  - Specify flip angle set 1 = Deoni 2 = Ollinger
 %    flags
 %             - .afi: use AFI instaed of DESPOT1-HIFI for FA mapping
