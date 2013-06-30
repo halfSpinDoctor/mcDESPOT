@@ -25,6 +25,8 @@
 %            coregistration (Oct-2010)
 %     v3.3 - Tweaked settings, added omat so that transforms are saved (Jan-2011)
 %     v3.4 - Updated to be compatible with afi_flag & ideal_flag options (Feb-2012)
+%     v3.5 - Updated to daisy-chain coreg of SPGR as well as SSFP-0 (since 6th or 7th
+%            SPGR FA ususally show very little contrast, as opposted to PD or T1-w).
 
 function coreg_mcdespot()
 
@@ -79,6 +81,7 @@ end
 if exist('target', 'var')
   disp('Using External Coregistration Target');
   ref = target;
+  
 else
   % Coregistration Reference for SPGR
   disp('Using 1st SPGR Scan as Coregistration Target');
@@ -97,15 +100,34 @@ if isfield(status, 'mask') && status.mask == 1 %#ok<NODEF>
   opts = [opts, ' -refweight ' dir.MASK status.maskname];
 end
 
-%% Coreg SPGR
-disp('== Coregistration of SPGR ==');
-for ii = 1:length(alpha_spgr)
+%% Coreg First SPGR
+ii = 1;
   disp(['--Flip Angle ' num2str(alpha_spgr(ii), '%02.0f') '--']);
   % Source File
   in  = [dir.BASE dir.SPGR 'spgr_'  num2str(ii, '%02.0f')];
   % Result Filename
   out = [dir.COREG dir.SPGR 'spgr_' num2str(ii, '%02.0f')];
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
+  
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
+  eval(['!fslchfiletype NIFTI ' out]);
+
+
+
+%% Coreg Rest of SPGR
+disp('== Coregistration of SPGR ==');
+for ii = 2:length(alpha_spgr)
+  
+  % Daisy-chain coreg of high FA scans -- Hack-ey way, fix later
+  ref   = [dir.COREG dir.SPGR 'spgr_' num2str((ii-1), '%02.0f')];
+  opts1 = [opts ' -init ' dir.COREG dir.SPGR 'spgr_' num2str((ii-1), '%02.0f') '.txt '];
+  
+  disp(['--Flip Angle ' num2str(alpha_spgr(ii), '%02.0f') '--']);
+  % Source File
+  in  = [dir.BASE dir.SPGR 'spgr_'  num2str(ii, '%02.0f')];
+  % Result Filename
+  out = [dir.COREG dir.SPGR 'spgr_' num2str(ii, '%02.0f')];
+  
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
   eval(['!fslchfiletype NIFTI ' out]);
 end
 
@@ -181,32 +203,32 @@ for ii = 2:length(alpha_ssfp)
 end
 
 
-% Then, Coreg 1st SSFP-0 image to T2-w SSFP-180 image
+% Then, Coreg 1st SSFP-0 image to partly T2-w SSFP-180 image (4th FA SSFP)
 disp('== Coregistration of SSFP-0 Data ==');
-ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(length(alpha_ssfp), '%02.0f')];
+ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f')];
 ii = 1;
 disp(['--Flip Angle ' num2str(alpha_ssfp(ii), '%02.0f') ' Cycle: 0--']);
 in  = [dir.BASE  dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
 % Result Filename
 out = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
-eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
-eval(['!fslchfiletype NIFTI  ' out]);
-
-
-% Finally, coreg all the rest of the SSFP-0 images to daisy-chaing SSFP-0 Images
-ref  = [dir.COREG dir.SSFP_0 'ssfp_0_01 '];
-opts = [opts ' -init ' dir.COREG dir.SSFP_0 'ssfp_0_01.txt']; % Initial guess for SSFP-0
+% Add -init matrix
+opts1 = [opts ' -init ' dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f') '.txt '];
+eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
+eval(['!fslchfiletype NIFTI  ' out  ]);
 
 for ii = 2:length(alpha_ssfp)
+
+  % Finally, coreg all the rest of the SSFP-0 images to daisy-chaing SSFP-0 Images
+  ref   = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str((ii-1), '%02.0f')];
+  opts1 = [opts ' -init ' dir.COREG dir.SSFP_0 'ssfp_0_' num2str((ii-1), '%02.0f') '.txt '];
+
   disp(['--Flip Angle ' num2str(alpha_ssfp(ii), '%02.0f') ' Cycle: 0--']);
   in  = [dir.BASE  dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
   % Result Filename
   out = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
+
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
   eval(['!fslchfiletype NIFTI  ' out]);
-  
-  % Daisy-chain coreg: Use previous SSFP-0 image as next coreg target
-  ref = out;
 end
 
 time.coreg_end = datetime();
