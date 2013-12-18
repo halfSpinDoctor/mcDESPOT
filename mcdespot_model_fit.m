@@ -39,18 +39,19 @@
 %                           results from GaussianContraction as initial guess.
 %        V5.0  5-Nov-2012 - Updated to work with new cpMCDESPOT_residuals
 %                           re-factoring (Nov-2012)
+%        V6.0 10-Nov-2013 - Update based on Deoni et al. updated fitting methods.
 
 function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
 
 tic;
 
 %% O. Define constants for weighting data, iterations, etc
-RETAINED_TOP_RESIDUALS = 40;                       % Base number of solutions
-TOP_SOLUTION           = 5;                        % Keep top 5 answers as solution
+RETAINED_TOP_RESIDUALS = 50;                      % Base number of solutions
+TOP_SOLUTION           = 5;                       % Keep top 5 answers as solution
 
 CONTRACTION_STEPS      = 4;
-NUM_RANDOM_WALKS       = 28;
-NUM_SAMPLES            = 128;  % Must be 128 to match #threads/kernel on GPU
+NUM_RANDOM_WALKS       = 50;
+NUM_SAMPLES            = 100;  % Must be 128 to match #threads/kernel on GPU
 
 % SIGNALSCALE = 1000;  % Hard-coded into GPU code
 % MAX_ALPHA_SPGR = 40; % Hard-coded into GPU code 
@@ -89,6 +90,9 @@ else
   disp('mcDESPOT Fitting:');
 end
 
+% Initialize Random Seed
+rng('shuffle');
+
 %% Loop over non-zero voxels in the image
 for ii = find(~(sum(data_spgr, 2) == 0))'
   
@@ -111,7 +115,7 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   vox_alpha_ssfp    = alpha_ssfp(ii,:)';
 
   % Reset guess to initial guess
-  guess = initialGuess3T();
+  guess = initialGuess3T_SDMRM();
   
   % Set the B0 to the DESPOT2-FM Omega
   vox_omega = omega(ii);
@@ -120,7 +124,11 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   for jj = 1:CONTRACTION_STEPS            % Loop for iterations
     
     % Generate NUM_RANDOM_WALKS * NUM_SAMPLES
-    x = generatePoints(guess, NUM_RANDOM_WALKS*NUM_SAMPLES);
+    if jj == 1
+      x = generatePointsUniform(guess, NUM_RANDOM_WALKS*NUM_SAMPLES);
+    else
+      x = generatePointsGauss(guess, NUM_RANDOM_WALKS*NUM_SAMPLES);
+    end
     
     % Compute residuals via CPU
     resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
@@ -135,23 +143,27 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     
     % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
     
-    if vox_omega < off_res_range * 0.33
-      % Use SSFP-180 Only (SSFP-0 is zero signal)
-      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
-    elseif vox_omega < off_res_range * 0.50
-      % Use both, weight SSFP-180 Higher
-      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
-    elseif vox_omega < off_res_range * 0.66
-      % Use both, weight SSFP-0 H 0ig 0her
-      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
-    else
-      % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
-      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
-    end
+%     if vox_omega < off_res_range * 0.33
+%       % Use SSFP-180 Only (SSFP-0 is zero signal)
+%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
+%     elseif vox_omega < off_res_range * 0.50
+%       % Use both, weight SSFP-180 Higher
+%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
+%     elseif vox_omega < off_res_range * 0.66
+%       % Use both, weight SSFP-0 Higher
+%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
+%     else
+%       % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
+%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
+%     end
+    
+    % TESTING: Weight SSFP Equally
+    % res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)/2*resSSFP_180 + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)/2*resSSFP_0;
+    res = resSPGR + resSSFP_0 + resSSFP_180;
     
 %    % DEBUG: Show residual vectors
 %     plot(1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSPGR, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_0, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_180);
-%     ylim([0 .5]);
+%     ylim([0 .1]);
 %     title(num2str(jj));
 %     legend('SPGR', 'SSFP-0', 'SSFP-180');
 %     pause(.5);
@@ -164,20 +176,28 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
       % Update mean, min, max, stdev based on top residuals
       idx = idx(1:RETAINED_TOP_RESIDUALS);
       guess = updateGuess(x(idx,:));
+      % guessStd(jj) = guess(5,1);
     end
     
   end % End contraction steps
   
-  % Return result as mean of top 5 solutions
+  
+  % Return result as mean of top solutions
   idx   = idx(1:TOP_SOLUTION);
   guess = updateGuess(x(idx,:));
+  % guessStd(jj) = guess(5,1);
+  
+% % DEBUG: Plot Sigma of each GaussContract for MWF
+%   plot([1:7],guessStd);
+%   ylim([0 0.25]);
+%   drawnow;
   
   %% OPTIMIZATION STEP II: Use guess as initial guess for local optim (fminsearch)
   
-%   % Gaussian Contraction + FMINSEARCH
-%   [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
+  % Gaussian Contraction + FMINSEARCH
+  % [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
 
-  % DEBUG: Gaussian Contraction Only
+  % Gaussian Contraction Only
   x = guess(:,1)';
   rnrm(ii) = res(1);
   
@@ -196,7 +216,8 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     disp(['  ' num2str(fv(ii,1)*1000, '%03.0f') ' ms  | ' num2str(fv(ii,2)*1000, '%04.0f') ' ms |   ' num2str(fv(ii,3)*1000, '%02.0f') ' ms   |  ' num2str(fv(ii,4)*1000, '%03.0f') ' ms | ' num2str(fv(ii,5)*100, '%02.0f') '% | ' num2str(fv(ii,6)*1000, '%03.0f') ' ms | ' num2str(rnrm(ii), '%03.3f') ' | ' num2str(pt*100/npts) '%']);
   end
   
-  if debug == 1
+  
+  if debug == 2
     % Setup Figure
     if ~exist('dbfig', 'var')
       dbfig = figure;
@@ -229,24 +250,14 @@ toc;
 
 % Wrapper for fminsearch call of mcDESPOT model
   function res = mcdespot_model(x)
-    [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH([x(:,1), x(:,2), x(:,3), x(:,4), x(:,5), x(:,6)]',vox_omega(:), vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1); %#ok<ASGLU>
-    
+    % Compute residuals via CPU
+    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
+    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
+    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
+      
     % DEBUG: Completly Equal Wt
     res = resSPGR + resSSFP_0 + resSSFP_180;
     
-%     if vox_omega < off_res_range * 0.33
-%       % Use SSFP-180 Only (SSFP-0 is zero signal)
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
-%     elseif vox_omega < off_res_range * 0.50
-%       % Use both, weight SSFP-180 Higher
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
-%     elseif vox_omega < off_res_range * 0.66
-%       % Use both, weight SSFP-0 H 0ig 0her
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
-%     else
-%       % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
-%     end
   end
 
 %% Initial Guess for 3.0T Magnet, human brain
@@ -268,6 +279,31 @@ toc;
     ig(6,:) = [.120 .075 .250 .025];
   end
 
+%% Initial Guess for 3.0T, SD MRM 2013 Preprint
+  function ig = initialGuess3T_SDMRM()
+    % Note that only min and max are needed (because we are drawing from a flat
+    % distribution, not a Gaussian one.)
+    %
+    % Gaussian distribution for iteration #2+ will re-compute the mean and stdev
+    % on-the-fly
+    
+    %         [mean  min  max  std]
+    % T1m
+    ig(1,:) = [0 0.30 0.65 0];
+    % T1f
+    ig(2,:) = [0 0.50 1.50 0];
+
+    % T2m
+    ig(3,:) = [0 .001 .030 0];
+    % T2f
+    ig(4,:) = [0 .050 .165 0];
+
+    % MWF
+    ig(5,:) = [0 0.00 0.35 0];
+    % Tau
+    ig(6,:) = [0 0.025 .60 0];
+  end
+
 %% Generate guess points based on gaussian model, from initial guess
 
 % % DEBUG DEBUG -- make all pts the same
@@ -287,8 +323,34 @@ toc;
 % 
 %   end
 
+% Based on Uniform distributions
+  function pts = generatePointsUniform(ig, nguess)
+
+    % Preallocate pts
+    pts = zeros([nguess 6]);
+
+    % For each paramter
+    for  kk = 1:6
+      % Generate a random number from a uniform distribution on the interval [min max]
+      % Mean + (random gaussian)*std
+      min = ig(kk,2);
+      max = ig(kk,3);
+
+      tmp = min + (max-min).*rand([nguess 1]);
+      
+%       if (debug > 0) && (kk == 5)
+%         hist(tmp,10);
+%         xlim([0 .4]);
+%         drawnow;
+%       end
+      
+      pts(:,kk) = tmp;
+    end
+
+  end
+
 % Based on Gaussian distributions
-  function pts = generatePoints(ig, nguess)
+  function pts = generatePointsGauss(ig, nguess)
 
     % Preallocate x
     pts = zeros([nguess 6]);
@@ -297,9 +359,21 @@ toc;
     for  kk = 1:6
       % Mean + (random gaussian)*std
       tmp = ones([nguess 1])*ig(kk,1) + randn([nguess 1])*ig(kk,4);
-      % Set all values below minimum to minimum
+      
+      % Re-Generate Any Points Below the Minimum
+      tsize = size(tmp((tmp < ig(kk,2))));
+      tmp((tmp < ig(kk,2))) = ones([tsize 1])*ig(kk,1) + randn([tsize 1])*ig(kk,4);
+      
+      % Set any remaining values below minimum, to the minimum
       tmp((tmp < ig(kk,2))) = ig(kk,2);
-      % Set all values above maximum to maximum
+      
+      % -- %
+      
+      % Re-Generate Any Points Above the Maximum
+      tsize = size(tmp((tmp > ig(kk,3))));
+      tmp((tmp > ig(kk,3))) = ones([tsize 1])*ig(kk,1) + randn([tsize 1])*ig(kk,4);
+      
+      % Set any remaining values above maximum, to maximum
       tmp((tmp > ig(kk,3))) = ig(kk,3);
 
       pts(:,kk) = tmp;
@@ -315,7 +389,20 @@ toc;
     % Loop over each parameter
     for kk = 1:6
       % Update guess matrix with calcuated mean, min, max, and std
-      g(kk,:) = [mean(xvals(:,kk)) 0.95*min(xvals(:,kk)) 1.05*max(xvals(:,kk)) std(xvals(:,kk))];
+      % g(kk,:) = [mean(xvals(:,kk)) 0.95*min(xvals(:,kk)) 1.05*max(xvals(:,kk)) std(xvals(:,kk))];
+      
+      % SD MRM 2013 - search space is expanded by (max-min) / N_T
+      expand_amount = (max(xvals(:,kk)) - min(xvals(:,kk))) / RETAINED_TOP_RESIDUALS;
+      
+      minval = min(xvals(:,kk))-expand_amount;
+      if minval < 0
+        minval = 0;
+      end
+      
+      maxval = max(xvals(:,kk))+expand_amount;
+
+      g(kk,:) = [mean(xvals(:,kk)) minval maxval std(xvals(:,kk))];
+      
     end
 
   end

@@ -108,9 +108,8 @@ ii = 1;
   % Result Filename
   out = [dir.COREG dir.SPGR 'spgr_' num2str(ii, '%02.0f')];
   
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
-
 
 
 %% Coreg Rest of SPGR
@@ -203,9 +202,11 @@ for ii = 2:length(alpha_ssfp)
 end
 
 
-% Then, Coreg 1st SSFP-0 image to partly T2-w SSFP-180 image (4th FA SSFP)
+% Then, Coreg 1st SSFP-0 image to partly T2-w SSFP-180 image (1st FA SSFP)
+SSFP_0_REF = floor(length(alpha_ssfp)/2); % 4th SSFP-180 Image
+
 disp('== Coregistration of SSFP-0 Data ==');
-ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f')];
+ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(SSFP_0_REF, '%02.0f')];
 ii = 1;
 disp(['--Flip Angle ' num2str(alpha_ssfp(ii), '%02.0f') ' Cycle: 0--']);
 in  = [dir.BASE  dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
