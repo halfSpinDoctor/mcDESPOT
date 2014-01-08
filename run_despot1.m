@@ -154,6 +154,7 @@ pd  = reshape(pd,  [dataSize(1) dataSize(2) dataSize(3)]);
 % Save NIfTI
 img_dcm_to_nifti(iminv(r1), info_spgr, [dir.DESPOT1 'DESPOT1-T1']);
 img_dcm_to_nifti(fam_s, info_spgr,     [dir.DESPOT1 'DESPOT1-FAM']);
+img_dcm_to_nifti(fam, info_spgr,       [dir.DESPOT1 'DESPOT1-FAM_Unsmooth']);
 img_dcm_to_nifti(pd, info_spgr,        [dir.DESPOT1 'DESPOT1-PD']);
 img_dcm_to_nifti(rnrm, info_spgr,      [dir.DESPOT1 'DESPOT1-Rnrm']);
 
