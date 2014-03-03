@@ -37,9 +37,10 @@
 %                           Reverted from fminsearch back to Sean's algorithm.
 %        V4.4 27-Jan-2012 - Added FMINSEARCH as 2nd step in fitting, using
 %                           results from GaussianContraction as initial guess.
-%        V5.0  5-Nov-2012 - Updated to work with new cpMCDESPOT_residuals
+%        V4.5  5-Nov-2012 - Updated to work with new cpMCDESPOT_residuals
 %                           re-factoring (Nov-2012)
-%        V6.0 10-Nov-2013 - Update based on Deoni et al. updated fitting methods.
+%        V5.0 10-Nov-2013 - Update based on Deoni et al. updated fitting methods.
+%        (Note: 3/3/2014 changed VER numbers to match other funcs)
 
 function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
 
