@@ -143,23 +143,19 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     
     % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
     
-%     if vox_omega < off_res_range * 0.33
-%       % Use SSFP-180 Only (SSFP-0 is zero signal)
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
-%     elseif vox_omega < off_res_range * 0.50
-%       % Use both, weight SSFP-180 Higher
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
-%     elseif vox_omega < off_res_range * 0.66
-%       % Use both, weight SSFP-0 Higher
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
-%     else
-%       % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
-%     end
-    
-    % TESTING: Weight SSFP Equally
-    % res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)/2*resSSFP_180 + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)/2*resSSFP_0;
-    res = resSPGR + resSSFP_0 + resSSFP_180;
+    if vox_omega < off_res_range * 0.33
+      % Use SSFP-180 Only (SSFP-0 is zero signal)
+      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
+    elseif vox_omega < off_res_range * 0.50
+      % Use both, weight SSFP-180 Higher
+      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
+    elseif vox_omega < off_res_range * 0.66
+      % Use both, weight SSFP-0 Higher
+      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
+    else
+      % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
+      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
+    end
     
 %    % DEBUG: Show residual vectors
 %     plot(1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSPGR, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_0, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_180);

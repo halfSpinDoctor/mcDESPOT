@@ -12,7 +12,7 @@
 %    IMPLICIT: New directory called singleComponent
 %
 % Samuel A. Hurley
-% v3.5 28-Feb-2012
+% v3.6 14-Jan-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)     (Sept-2010)
@@ -21,6 +21,7 @@
 %     v3.3 - Normalizes input PD by max voxel signal in masked image. (Jul-2011)
 %     v3.4 - Fixed normalization of 2nd (non-smoothed) T1 iteration   (Jan-2012)
 %     v3.5 - Updated to be compatible with afi_flag & ideal_flag options (Feb-2012)
+%     v3.6 - Fixed mask.spgr() bug when BET mask is not specified (Jan-2014)
 
 function [] = run_despot1()
 
@@ -77,7 +78,7 @@ if isfield(status, 'mask') && status.mask == 1
   disp(['Using user-supplied mask.']);
 else
   % Threshold above 0
-  mask = spgr(:,:,:,1) > 0;
+  mask = img.spgr(:,:,:,1) > 0;
   disp('Using threshold mask.');
 end
 

@@ -21,68 +21,76 @@ tau = load_nifti('mcDESPOT-Tau.nii');
 
 % Trim near-zero values for MWF
 mwf(mwf<.005) = 0;
+figure;
 
 % Make Subplots
 subplot(2,3,1);
+hist(mwf(find(mwf)),100);
 title 'MWF'
 xlabel '%'
+
 subplot(2,3,2)
 hist(t1m(find(t1m)),100);
 title 'T1_m'
 xlabel 's'
 subplot(2,3,3)
+
 hist(t1f(find(t1f)),100);
 title 'T1_f'
 xlabel 's'
 subplot(2,3,4)
+
 hist(tau(find(tau)),100);
 title 'Tau'
 xlabel 's'
 subplot(2,3,5)
+
 hist(t2m(find(t2m)),100);
 title 'T2_m'
 xlabel 's'
 subplot(2,3,6)
+
 hist(t2f(find(t2f)),100);
 title 'T2_f'
 xlabel 's'
 
 % Slice for plotting
 sl = 84;
+figure;
 
 % Plot MWF parameters
 subplot(2,3,1);
-imagesc(mcd_fv(:,:,sl,5));
-axis image; axis off;
+imagesc(mwf(:,:,sl), [0 .30]);
+axis image; axis off; colormap gray; colorbar;
 title 'MWF'
-xlabel '%'
+
 
 subplot(2,3,2)
-imagesc(mcd_fv(:,:,sl,1));
-axis image; axis off;
+imagesc(t1m(:,:,sl));
+axis image; axis off; colormap gray; colorbar;
 title 'T1_m'
 xlabel 's'
 
 subplot(2,3,3)
-imagesc(mcd_fv(:,:,sl,2));
-axis image; axis off;
+imagesc(t1f(:,:,sl));
+axis image; axis off; colormap gray; colorbar;
 title 'T1_f'
 xlabel 's'
 
 subplot(2,3,4)
-imagesc(mcd_fv(:,:,sl,6));
-axis image; axis off;
+imagesc(tau(:,:,sl));
+axis image; axis off; colormap gray; colorbar;
 title 'Tau'
 xlabel 's'
 
 subplot(2,3,5)
-imagesc(mcd_fv(:,:,sl,3));
-axis image; axis off;
+imagesc(t2m(:,:,sl));
+axis image; axis off; colormap gray; colorbar;
 title 'T2_m'
 xlabel 's'
 
 subplot(2,3,6)
-imagesc(mcd_fv(:,:,sl,4));
-axis image; axis off;
+imagesc(t2f(:,:,sl));
+axis image; axis off; colormap gray; colorbar;
 title 'T2_f'
 xlabel 's'
