@@ -12,7 +12,7 @@
 %    IMPLICIT: New directory called singleComponent
 %
 % Samuel A. Hurley
-% v3.6 14-Jan-2014
+% v5.0 05-Mar-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)     (Sept-2010)
@@ -22,6 +22,8 @@
 %     v3.4 - Fixed normalization of 2nd (non-smoothed) T1 iteration   (Jan-2012)
 %     v3.5 - Updated to be compatible with afi_flag & ideal_flag options (Feb-2012)
 %     v3.6 - Fixed mask.spgr() bug when BET mask is not specified (Jan-2014)
+%     v5.0 - Skipped v4 to make maj rev match between all mcDESPOT codes (Mar-2014)
+%            Added support for Bloch-Siegert FA map
 
 function [] = run_despot1()
 
@@ -29,8 +31,8 @@ function [] = run_despot1()
 diary('_mcdespot_log.txt');
 
 % Display Banner
-VER     = 3.5;
-VERDATE = '28-Feb-2012';
+VER     = 5.0;
+VERDATE = '05-Mar-2014';
 
 % Display banner
 disp('=== cpMCDESPOT - Multicomponent Relaxomtery Analysis ===');
@@ -85,7 +87,7 @@ end
 % Get size of data
 dataSize = size(img.spgr);
 
-% AFI For FA Map
+%% AFI For FA Map
 if afi_flag == 1
   %% Standard (non-VAFI) Mapping
   fam = afi_standard(img.afi_01, img.afi_02, 5) ./ alpha_afi;
@@ -94,7 +96,18 @@ if afi_flag == 1
   disp('3D Smoothing AFI FA Map');
   fam_s = img_smooth_polyfit(fam,  mask, 3, 1);
   rnrm  = zeros(size(fam_s));
+
+%% Bloch-Siegert for FA Map
+elseif afi_flag == 2
+  fam = img.afi_01 ./ (alpha_afi * 10);
   
+  % 3D Smooth /w Mask
+  disp('3D Smoothing AFI FA Map');
+  fam_s = img_smooth_polyfit(fam,  mask, 3, 1);
+  rnrm  = zeros(size(fam_s));
+  
+  
+%% IR-SPGR (HIFI) for FA Map
 else
   
   % Grab the necessary data
