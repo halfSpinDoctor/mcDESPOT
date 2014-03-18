@@ -320,7 +320,7 @@ toc;
 % 
 %   end
 
-% Based on Uniform distributions
+%% Based on Uniform distributions
   function pts = generatePointsUniform(ig, nguess)
 
     % Preallocate pts
@@ -346,7 +346,7 @@ toc;
 
   end
 
-% Based on Gaussian distributions
+%% Based on Gaussian distributions
   function pts = generatePointsGauss(ig, nguess)
 
     % Preallocate x

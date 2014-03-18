@@ -15,7 +15,7 @@
 %    Implicit: New directory called coregisteredData
 %
 % Samuel A. Hurley
-% v3.4 28-Feb-2012
+% v5.0 - 18-Mar-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)  (Jun-2010)
@@ -27,6 +27,9 @@
 %     v3.4 - Updated to be compatible with afi_flag & ideal_flag options (Feb-2012)
 %     v3.5 - Updated to daisy-chain coreg of SPGR as well as SSFP-0 (since 6th or 7th
 %            SPGR FA ususally show very little contrast, as opposted to PD or T1-w).
+%     v5.0 - Skip 4.0 to make syc release versioning
+%            Tweaked coreg ranges to reduce chances of SSFP-0 failing. Added support
+%            for Bloch-Siegert B1 flag. (Mar-2014)
 
 function coreg_mcdespot(target)
 
