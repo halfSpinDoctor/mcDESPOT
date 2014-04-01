@@ -17,7 +17,7 @@
 %   1.0 - Initial version, based off of blochMcConnell.m
 %
 
-function dM = bloch(M, fv, b1)
+function dM = blochSingle(M, fv, b1)
 
 % Constants
 GAMMA = 267.513e6; % rad/s/T   1H Gyromagnetic Ratio
@@ -40,10 +40,8 @@ Mz = M(3);
 
 % == Differential ==
 dM(1) =  w_0*My - Mx/T2;
-
-dM(2) = -w_0*Mx - My/T2 + w_1*Mz_m;
-
-dM(3) = (M0 - Mz)/T1    - w_1*My_m;
+dM(2) = -w_0*Mx - My/T2 + w_1*Mz;
+dM(3) = (M0 - Mz)/T1    - w_1*My;
 
 dM = dM';
 
