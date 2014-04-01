@@ -54,8 +54,13 @@ for jj = 1:length(alpha)
   % *** Note, first term (1,1) of A_spgr has been corrected (quited as -1/(t1_f-k_fs) in paper)
   A_spgr = [-r1_m-k_fs    k_sf  
              k_fs        -r1_f-k_sf];
-            
 
+  disp(['Rank of A_SPGR:   ' num2str(rank(A_spgr))]);
+  disp(['Det  of A_SPGR:   ' num2str(det( A_spgr))]);
+  disp(['Cond of A_SPGR:   ' num2str(cond(A_spgr))]);
+  disp(['Det  of exp(A*TR) ' num2str(det(expm(A_spgr*tr_spgr)))]);
+  disp(['Cond of exp(A*TR) ' num2str(cond(expm(A_spgr*tr_spgr)))]);
+  
   M0 = pd_spgr * [MWF (1-MWF)]';
   
   % Mss - Steady state longitudinal magnitization, times a factor sin(alpha) gives the 
@@ -80,7 +85,13 @@ for jj = 1:length(alpha)
             0            w           k_fs       -r2_f-k_sf  0            0
             0            0           0           0         -r1_m-k_fs    k_sf
             0            0           0           0          k_fs        -r1_f-k_sf];
-          
+
+  A_ssfp;
+  disp(['Rank of A_SSFP:   ' num2str(rank(A_ssfp))]);
+  disp(['Det  of A_SSFP:   ' num2str(det( A_ssfp))]);
+  disp(['Cond of A_SSFP:   ' num2str(cond(A_ssfp))]);
+  disp(['Det  of exp(A*TR) ' num2str(det(expm(A_ssfp*tr_ssfp)))]);
+  disp(['Cond of exp(A*TR) ' num2str(cond(expm(A_ssfp*tr_ssfp)))]);
 
   % Rotation Matrix
   R = [1    0    0                 0               0               0
