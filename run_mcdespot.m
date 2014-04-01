@@ -1,4 +1,4 @@
-% FUNCTION [mcd_fv mcd_rnrm] = run_mcdespot(mode, slices, fam, b0_map, iter)
+% FUNCTION [mcd_fv mcd_rnrm] = run_mcdespot(slices)
 %
 % FUNCTION to automatie call to mcDESPOT fitting routine.
 %
@@ -249,7 +249,7 @@ send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' d
 
 %% Write out to NIfTI
 % Save NIfTI
-img_dcm_to_nifti(mcd_fv(:,:,:,1), info_spgr, [dir.MCDESPOT 'mcDESPOT-T1m']);
+img_dcm_to_nifti(mcd_fv(:,:,:,1), info_spgr,[dir.MCDESPOT 'mcDESPOT-T1m']);
 img_dcm_to_nifti(mcd_fv(:,:,:,2), info_spgr,[dir.MCDESPOT 'mcDESPOT-T1f']);
 img_dcm_to_nifti(mcd_fv(:,:,:,3), info_spgr,[dir.MCDESPOT 'mcDESPOT-T2m']);
 img_dcm_to_nifti(mcd_fv(:,:,:,4), info_spgr,[dir.MCDESPOT 'mcDESPOT-T2f']);

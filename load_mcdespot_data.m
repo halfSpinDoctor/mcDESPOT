@@ -9,7 +9,7 @@
 %    dirnames - Path to DICOM files: SPGR, IR-SPGR/AFI, SSFP-180, SSFP-0
 %    flipset  - Specify flip angle set 1 = Deoni 2 = Ollinger
 %    flags
-%             - .afi: use AFI instaed of DESPOT1-HIFI for FA mapping
+%             - .afi: use AFI instaed of DESPOT1-HIFI for FA mapping (0=HIFI 1=AFI 2=BS)
 %             - .ideal: use IDEAL instead of DESPOT2-FM for B0 mapping
 %             - .vnmr: load VnmrJ pre-clinical data instead of GE DICOM
 %             - .reorient: reorient all image series to Axial (improves  BET)
@@ -46,6 +46,9 @@
 %    v3.7 Reorients to Axial (makes BET work, and easier to view in FSLView) (13-Feb-2012)
 %    v3.8 Combined load_mcdespot_vnmr with load_mcdespot_data (to cover AFI vs hifi case) (27-Feb-2012)
 %    v3.9 Uses check_gain to handle if SSFP phase cycles end up with different reciever gain settings (12-Sept-2012)
+%
+%    v5.0 NOTE: Jump to 5.0 to keep source maj rev in sync.
+%               Added support for Bloch-Siegert (BS) B1 correction (in addition to AFI and HIFI)
 
 function [] = load_mcdespot_data(dirnames, flipset, flags)
 
@@ -53,8 +56,8 @@ function [] = load_mcdespot_data(dirnames, flipset, flags)
 diary('_mcdespot_log.txt');
 %clc;
 
-VER = 3.9;
-VERDATE = '12-Sept-2012';
+VER = 5.0;
+VERDATE = '3-Mar-2014';
 
 % Directory Locations
 dir.BASE     = './originalData/';
@@ -146,8 +149,12 @@ else
   % Read in input directories
   if afi_flag == 1 && ideal_flag == 1
     [dirnames sts] = spm_select(5, 'dir', 'Select SPGR, AFI, SSFP-180, SSFP-0, IDEAL');
+  elseif afi_flag == 2 && ideal_flag == 1
+    [dirnames sts] = spm_select(5, 'dir', 'Select SPGR, Bloch-Siegert, SSFP-180, SSFP-0, IDEAL');
   elseif afi_flag == 1 && ideal_flag == 0
     [dirnames sts] = spm_select(4, 'dir', 'Select SPGR, AFI, SSFP-180, SSFP-0');
+  elseif afi_flag == 2 && ideal_flag == 0
+    [dirnames sts] = spm_select(4, 'dir', 'Select SPGR, Bloch-Siegert, SSFP-180, SSFP-0');
   elseif ideal_flag == 1
     [dirnames sts] = spm_select(5, 'dir', 'Select SPGR, IR-SPGR, SSFP-180, SSFP-0, IDEAL');
   else
@@ -176,7 +183,7 @@ mkdir([dir.BASE dir.SSFP_0]);
 mkdir([dir.BASE dir.SSFP_180]);
 
 % Create External Cal Directory
-if afi_flag == 1 || ideal_flag == 1
+if afi_flag > 0 || ideal_flag == 1
   mkdir([dir.BASE dir.EXT_CAL]);
 end
 
@@ -193,8 +200,11 @@ end
 if afi_flag == 0
   [img_irspgr info_irspgr]   = load_dicom(dirnames{2});
   info_afi    = [];
-else
+elseif afi_flag == 1
   [img_afi    info_afi]      = load_dicom(dirnames{2},[],1); % AFI Flag
+  info_irspgr = [];
+elseif afi_flag == 2 % SAH 5.0 case for Bloch-Siegert. Keep 'afi' name
+  [img_afi    info_afi]      = load_dicom(dirnames{2},[],0);
   info_irspgr = [];
 end
 
@@ -240,8 +250,10 @@ disp(['SSFP TR:            ' num2str(tr_ssfp)    ' ms']);
 if afi_flag == 0
   disp(['IR-SPGR TR:         ' num2str(tr_irspgr)  ' ms']);
   disp(['IR-SPGR TI:         ' num2str(ti_irspgr)  ' ms']);
-else
+elseif afi_flag == 1
   disp(['AFI TR:             ' num2str(info_afi.RepetitionTime) ' ms']);
+else
+  disp(['BS  TR:             ' num2str(info_afi.RepetitionTime) ' ms']);
 end
 
 % Check Reciever/Transmitter Gains
@@ -249,8 +261,10 @@ disp( '========================================================');
 disp(['SPGR     R1/R2/TG:  ' num2str(info_spgr.Private_0019_108a,     '%02i') '/' num2str(info_spgr.Private_0019_108b,     '%02i') '/' num2str(info_spgr.Private_0019_1094,     '%02i')]);
 if afi_flag == 0
   disp(['IRSPGR   R1/R2/TG:  ' num2str(info_irspgr.Private_0019_108a, '%02i') '/' num2str(info_irspgr.Private_0019_108b,   '%02i') '/' num2str(info_irspgr.Private_0019_1094,   '%02i')]);
-else
+elseif afi_flag == 1
   disp(['AFI      R1/R2/TG:  ' num2str(info_afi.Private_0019_108a,    '%02i') '/' num2str(info_afi.Private_0019_108b,      '%02i') '/' num2str(info_afi.Private_0019_1094,      '%02i')]);
+else
+  disp(['BS       R1/R2/TG:  ' num2str(info_afi.Private_0019_108a,    '%02i') '/' num2str(info_afi.Private_0019_108b,      '%02i') '/' num2str(info_afi.Private_0019_1094,      '%02i')]);
 end
 disp(['SSFP-180 R1/R2/TG:  ' num2str(info_ssfp_180.Private_0019_108a, '%02i') '/' num2str(info_ssfp_180.Private_0019_108b, '%02i') '/' num2str(info_ssfp_180.Private_0019_1094, '%02i')]);
 disp(['SSFP-0   R1/R2/TG:  ' num2str(info_ssfp_0.Private_0019_108a,   '%02i') '/' num2str(info_ssfp_0.Private_0019_108b,   '%02i') '/' num2str(info_ssfp_0.Private_0019_1094,   '%02i')]);
@@ -262,8 +276,10 @@ disp(['SSFP Flip Angles:   ' num2str(alpha_ssfp,     '%02.0f ')    ' degrees']);
 if afi_flag == 0
   disp(['IR-SPGR Flip Angle: ' num2str(alpha_irspgr, '%02.0f ')    ' degrees']);
   disp(['IR-SPGR NumPhaseEnc:' num2str(npe_irspgr,   '%03.0f ')              ]);
-else
+elseif afi_flag == 1
   disp(['AFI Flip Angle:     ' num2str(alpha_afi,    '%02.0f') ' degrees']);
+else
+  disp(['BS  Flip Angle:     ' num2str(alpha_afi,    '%02.0f') ' degrees']);
 end
 
 % Display the SSFP phase cycling is correct
@@ -291,7 +307,7 @@ if afi_flag == 0
   if (info_spgr.Private_0019_1094 ~= info_irspgr.Private_0019_1094)
     disp('SPGR and IR-SPGR Have Different Transmitter Gains');
   end
-else
+elseif afi_flag == 1
   % Check that AFI FA is 55
   if info_afi.FlipAngle ~= 55
     warning('AFI Flip Angle Should Be 55 degrees');
@@ -435,7 +451,7 @@ if reorient_flag == 1
     eval(['!rm -f ' invol]);
     eval(['!gunzip ' invol '.gz']);
     progressbar(1);
-  else
+  elseif afi_flag == 1
     fprintf('Reorient AFI:');
     progressbar(0);
     invol = [dir.BASE dir.EXT_CAL 'afi_01.nii'];
@@ -450,6 +466,8 @@ if reorient_flag == 1
     eval(['!gunzip ' invol '.gz']);
     progressbar(1);
   end
+  
+  % SAH 5.0: Note BS should always be acquired in axial, so no need to reorient
   
   if ideal_flag == 1
     fprintf('Reorient IDEAL: ');

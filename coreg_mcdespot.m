@@ -15,7 +15,7 @@
 %    Implicit: New directory called coregisteredData
 %
 % Samuel A. Hurley
-% v3.4 28-Feb-2012
+% v5.0 - 18-Mar-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)  (Jun-2010)
@@ -27,8 +27,13 @@
 %     v3.4 - Updated to be compatible with afi_flag & ideal_flag options (Feb-2012)
 %     v3.5 - Updated to daisy-chain coreg of SPGR as well as SSFP-0 (since 6th or 7th
 %            SPGR FA ususally show very little contrast, as opposted to PD or T1-w).
+%     v5.0 - Skip 4.0 to make syc release versioning
+%            Tweaked coreg ranges to reduce chances of SSFP-0 failing. Added support
+%            for Bloch-Siegert B1 flag. (Mar-2014)
 
-function coreg_mcdespot()
+function coreg_mcdespot(target)
+
+%% Initialization
 
 % Initiate Diary
 diary('_mcdespot_log.txt');
@@ -91,8 +96,8 @@ end
 % FLIRT Additional Options
 %   bins 256 is default
 %   searchx/y/z - assumes no more than +/- 5 degree shift
-opts = [' -datatype float  -searchcost mutualinfo -cost mutualinfo -bins 256 -dof 6 -searchrx -6 6' ...
-        ' -searchry -6 6 -searchrz -6 6  -coarsesearch 2 -finesearch 1 -interp sinc'];
+opts = [' -datatype float  -searchcost mutualinfo -cost mutualinfo -bins 256 -dof 6 -searchrx -2 2' ...
+        ' -searchry -2 2 -searchrz -2 2  -coarsesearch 2 -finesearch 1 -interp sinc'];
       
 % If mask already exists, specify as additional option
 if isfield(status, 'mask') && status.mask == 1 %#ok<NODEF>
@@ -108,9 +113,8 @@ ii = 1;
   % Result Filename
   out = [dir.COREG dir.SPGR 'spgr_' num2str(ii, '%02.0f')];
   
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
-
 
 
 %% Coreg Rest of SPGR
@@ -131,12 +135,12 @@ for ii = 2:length(alpha_spgr)
   eval(['!fslchfiletype NIFTI ' out]);
 end
 
-% Next, set T1w SPGR as ref for IR-SPGR or AFI, since they have more similar
-% contrast
+
+%% Coreg The FA Calbiration Map
+
+% Set T1w SPGR as ref for IR-SPGR or AFI, since they have more similar constrast
 ref = [dir.COREG dir.SPGR 'spgr_' num2str(length(alpha_spgr), '%02.0f')];
 
-
-% Coreg The FA Calbiration Map
 if afi_flag == 0
   % IR-SPGR
   disp('== Coregistration of IR-SPGR ==');
@@ -146,7 +150,7 @@ if afi_flag == 0
   out = [dir.COREG dir.IRSPGR 'irspgr'];
   eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
-else
+elseif afi_flag == 1
   % AFI
   disp('== Coregistration of AFI ==');
   disp('--AFI TR 1--');
@@ -161,11 +165,49 @@ else
   disp('--AFI TR 2--');
   in  = [dir.BASE dir.EXT_CAL 'afi_02'];
   out = [dir.COREG dir.EXT_CAL 'afi_02'];
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'afi_01.txt' opts]);
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'afi_02.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
+elseif afi_flag == 2 % Bloch-Siegert - apply identity XFORM to make resolution match
+  disp('== Coreg BS B1 Map ==');
+  disp('--BS (Mag)--');
+  
+  % Apply XFORM to resample BS into same space as SPGR
+  ref = [dir.COREG dir.SPGR 'spgr_01'];
+  % Source File
+  in  = [dir.BASE dir.EXT_CAL 'afi_02'];
+  % Result Filename
+  out = [dir.COREG dir.EXT_CAL 'afi_02'];
+
+  % Use AFNI 3dresample to get in same space/res first
+  eval(['!/export/home/hurley/Software/afni/3dresample -rmode Cu -master ' ref '.nii -prefix ' out '.nii -inset ' in '.nii']);
+
+%   info_bs = spm_vol([dir.BASE dir.EXT_CAL 'afi_02.nii' ]);
+%   info_sp = spm_vol([dir.BASE dir.SPGR    'spgr_01.nii']);
+%   
+%   % Write out Identity Xform
+%   write_xform(eye(4), [dir.COREG dir.EXT_CAL 'XFORM.txt']);
+%   
+%   eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'XFORM.txt' opts]);
+%   eval(['!fslchfiletype NIFTI ' out]);
+  
+  % Apply same xform to AFI_02
+  disp('--BS (Map)--');
+  in  = [dir.BASE dir.EXT_CAL  'afi_01'];
+  out = [dir.COREG dir.EXT_CAL 'afi_01'];
+  
+  % Use AFNI 3dresample
+  eval(['!/export/home/hurley/Software/afni/3dresample -rmode Cu -master ' ref '.nii -prefix ' out '.nii -inset ' in '.nii']);
+
+  
+%   eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'XFORM.txt' opts]);
+%   eval(['!fslchfiletype NIFTI ' out]);
+
+% Now Coreg resampled images
+
+
 end
 
-% Apply Identity XFORM to IDEAL to Make Sure Resolution Matches
+%% Coreg IDEAL - Apply Identity XFORM to IDEAL to Make Sure Resolution Matches
 if ideal_flag == 1
   disp('== Apply I4 Transform to IDEAL B0 Map ==');
   % Write out Identity Xform
@@ -175,6 +217,8 @@ if ideal_flag == 1
   eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'IDEAL.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
 end
+
+%% Coreg 1st SSFP-180
 
 % Next, coregister the first SSFP-180 image to the PD-weighted SPGR
 % Because they have similar contrast, then coreg all SSFP images to the
@@ -190,6 +234,8 @@ out = [dir.COREG dir.SSFP_180 'ssfp_180_01'];
 eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
 eval(['!fslchfiletype NIFTI ' out]);
 
+%% Coreg Rest of SSFP-180
+
 % Update Ref Image
 ref = [dir.COREG dir.SSFP_180 'ssfp_180_01'];
 
@@ -202,10 +248,15 @@ for ii = 2:length(alpha_ssfp)
   eval(['!fslchfiletype NIFTI  ' out]);
 end
 
+%% Coreg 1st SSFP-0
 
-% Then, Coreg 1st SSFP-0 image to partly T2-w SSFP-180 image (4th FA SSFP)
+% Then, Coreg 1st SSFP-0 image to partly T2-w SSFP-180 image (1st FA SSFP)
+SSFP_0_REF = 01; % 8th (or final) SSFP-180 Image
+
+% SSFP_0_REF = floor(length(alpha_ssfp)/2); % 4th SSFP-180 Image
+
 disp('== Coregistration of SSFP-0 Data ==');
-ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f')];
+ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(SSFP_0_REF, '%02.0f')];
 ii = 1;
 disp(['--Flip Angle ' num2str(alpha_ssfp(ii), '%02.0f') ' Cycle: 0--']);
 in  = [dir.BASE  dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
@@ -215,6 +266,8 @@ out = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
 opts1 = [opts ' -init ' dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f') '.txt '];
 eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
 eval(['!fslchfiletype NIFTI  ' out  ]);
+
+%% Coreg Rest of SSFP-0
 
 for ii = 2:length(alpha_ssfp)
 
@@ -230,6 +283,8 @@ for ii = 2:length(alpha_ssfp)
   eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
   eval(['!fslchfiletype NIFTI  ' out]);
 end
+
+%% Finish Up
 
 time.coreg_end = datetime();
 disp(['Coreg Complete: ' time.coreg_end]);
