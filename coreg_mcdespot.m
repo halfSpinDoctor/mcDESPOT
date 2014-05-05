@@ -163,9 +163,9 @@ elseif afi_flag == 1
   
   % Apply same xform to AFI_02
   disp('--AFI TR 2--');
-  in  = [dir.BASE dir.EXT_CAL 'afi_02'];
+  in  = [dir.BASE  dir.EXT_CAL 'afi_02'];
   out = [dir.COREG dir.EXT_CAL 'afi_02'];
-  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'afi_02.txt' opts]);
+  eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -applyxfm -init ' dir.COREG dir.EXT_CAL 'afi_01.txt' opts]);
   eval(['!fslchfiletype NIFTI ' out]);
 elseif afi_flag == 2 % Bloch-Siegert - apply identity XFORM to make resolution match
   disp('== Coreg BS B1 Map ==');

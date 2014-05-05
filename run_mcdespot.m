@@ -19,7 +19,7 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v4.0 09-Feb-2011
+% v5.1 30-Apr-2014
 %
 % Changelog:
 %     v1.0 - added options for coregistered data               (Jan-2010)
@@ -32,6 +32,10 @@
 %     v4.0 - Updated to work with newest mcdespot_model_fit version 4.2  (Feb-2011)
 %            Removed all inputs and outputs to the function
 %     v4.1 - Runs all slices if slices is not specified
+%     v5.0 - Make maj rev match between all mcDESPOT codes (Mar-2014)
+%     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
+%            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
+%            is set.) (Apr-2014)
 
 function [] = run_mcdespot(slices)
 tic;
@@ -40,11 +44,11 @@ tic;
 diary('_mcdespot_log.txt');
 clc;
 
-VER = 4.0;
-VERDATE = '09-Feb-2011';
+VER = 5.1;
+VERDATE = '30-Apr-2014';
 
 % E-mail Notification When Processing is Complete
-NOTIFY_EMAIL = '2628943063@email.uscc.net';            % Sam's Cell Phone
+NOTIFY_EMAIL = 'shurley@wisc.edu';            % Sam's Wiscmail
 
 % Builtin options
 DEBUG  = 0;           % Plot data fit quality
@@ -249,12 +253,12 @@ send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' d
 
 %% Write out to NIfTI
 % Save NIfTI
-img_dcm_to_nifti(mcd_fv(:,:,:,1), info_spgr,[dir.MCDESPOT 'mcDESPOT-T1m']);
-img_dcm_to_nifti(mcd_fv(:,:,:,2), info_spgr,[dir.MCDESPOT 'mcDESPOT-T1f']);
-img_dcm_to_nifti(mcd_fv(:,:,:,3), info_spgr,[dir.MCDESPOT 'mcDESPOT-T2m']);
-img_dcm_to_nifti(mcd_fv(:,:,:,4), info_spgr,[dir.MCDESPOT 'mcDESPOT-T2f']);
-img_dcm_to_nifti(mcd_fv(:,:,:,5), info_spgr,[dir.MCDESPOT 'mcDESPOT-MWF']);
-img_dcm_to_nifti(mcd_fv(:,:,:,6), info_spgr,[dir.MCDESPOT 'mcDESPOT-Tau']);
+img_nifti_to_nifti(mcd_fv(:,:,:,1), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T1m']);
+img_nifti_to_nifti(mcd_fv(:,:,:,2), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T1f']);
+img_nifti_to_nifti(mcd_fv(:,:,:,3), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T2m']);
+img_nifti_to_nifti(mcd_fv(:,:,:,4), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T2f']);
+img_nifti_to_nifti(mcd_fv(:,:,:,5), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-MWF']);
+img_nifti_to_nifti(mcd_fv(:,:,:,6), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-Tau']);
 
 
 %%

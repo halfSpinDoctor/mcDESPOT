@@ -12,12 +12,15 @@
 %    IMPLICIT: New directory called singleComponent
 %
 % Samuel A. Hurley
-% v3.1 29-Feb-2012
+% v5.1 30-Apr-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands) (Jun-2011)
 %     v3.1 - Updated to be compatible with afi_flag & ideal_flag options   (Feb-2012)
-
+%     v5.0 - Skipped v4 to make maj rev match between all mcDESPOT codes (Mar-2014)
+%     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
+%            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
+%            is set.) (Apr-2014)
 
 
 
@@ -131,19 +134,10 @@ omega = reshape(omega, [dataSize(1) dataSize(2) dataSize(3)]);
 rnrm  = reshape(rnrm,  [dataSize(1) dataSize(2) dataSize(3)]);
 
 % Save NIfTI
-if ~isfield(status, 'vnmr')
-  img_dcm_to_nifti(iminv(r2), info_spgr, [dir.DESPOT1 'DESPOT2-T2']);
-  img_dcm_to_nifti(omega, info_spgr,     [dir.DESPOT1 'DESPOT2-Omega']);
-  img_dcm_to_nifti(pd, info_spgr,        [dir.DESPOT1 'DESPOT2-PD']);
-  img_dcm_to_nifti(rnrm, info_spgr,      [dir.DESPOT1 'DESPOT2-Rnrm']);
-elseif status.vnmr == 1
-  img_vnmr_to_nifti(iminv(r2), info_spgr, [dir.DESPOT1 'DESPOT2-T2']);
-  img_vnmr_to_nifti(omega, info_spgr,     [dir.DESPOT1 'DESPOT2-Omega']);
-  img_vnmr_to_nifti(pd, info_spgr,        [dir.DESPOT1 'DESPOT2-PD']);
-  img_vnmr_to_nifti(rnrm, info_spgr,      [dir.DESPOT1 'DESPOT2-Rnrm']);
-else
-  error('VNMR Field Set Incorrectly');
-end
+img_nifti_to_nifti(iminv(r2), [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-T2']);
+img_nifti_to_nifti(omega,     [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-Omega']);
+img_nifti_to_nifti(pd,        [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-PD']);
+img_nifti_to_nifti(rnrm,      [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-Rnrm']);
 
 % Plot the center slice
 centerSlice = round(dataSize(3) / 2);

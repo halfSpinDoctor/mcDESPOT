@@ -24,6 +24,9 @@
 %     v3.6 - Fixed mask.spgr() bug when BET mask is not specified (Jan-2014)
 %     v5.0 - Skipped v4 to make maj rev match between all mcDESPOT codes (Mar-2014)
 %            Added support for Bloch-Siegert FA map
+%     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
+%            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
+%            is set.
 
 function [] = run_despot1()
 
@@ -166,11 +169,11 @@ r1  = reshape(r1,  [dataSize(1) dataSize(2) dataSize(3)]);
 pd  = reshape(pd,  [dataSize(1) dataSize(2) dataSize(3)]);
 
 % Save NIfTI
-img_dcm_to_nifti(iminv(r1), info_spgr, [dir.DESPOT1 'DESPOT1-T1']);
-img_dcm_to_nifti(fam_s, info_spgr,     [dir.DESPOT1 'DESPOT1-FAM']);
-img_dcm_to_nifti(fam, info_spgr,       [dir.DESPOT1 'DESPOT1-FAM_Unsmooth']);
-img_dcm_to_nifti(pd, info_spgr,        [dir.DESPOT1 'DESPOT1-PD']);
-img_dcm_to_nifti(rnrm, info_spgr,      [dir.DESPOT1 'DESPOT1-Rnrm']);
+img_nifti_to_nifti(iminv(r1), [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-T1']);
+img_nifti_to_nifti(fam_s,     [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-FAM']);
+img_nifti_to_nifti(fam,       [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-FAM_Unsmooth']);
+img_nifti_to_nifti(pd,        [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-PD']);
+img_nifti_to_nifti(rnrm,      [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-Rnrm']);
 
 % Plot the center slice
 centerSlice = round(dataSize(3) / 2);
