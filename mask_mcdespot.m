@@ -19,6 +19,7 @@
 %     v3.1 - Options to choose which SPGR image (flip angle) to use  (May-2010)
 %     v3.2 - Added additional arguemnts to BET (Oct-2010)
 %     v3.3 - Updated to be compatiable with afi_flag & ideal_flag options  (Feb-2012)
+%     v5.0 - Updated to use gzipped mask (instead of .nii mask) - easier for FSLView (Jun-2014)
 
 function mask_mcdespot(flip, prog)
 
@@ -40,8 +41,8 @@ if ~exist('prog', 'var')
 end
 
 % Display Banner
-VER     = 3.3;
-VERDATE = '28-Feb-2012';
+VER     = 5.0;
+VERDATE = 'Jun-2014';
 
 % Display banner
 disp(['=== cpMCDESPOT - Multicomponent Relaxomtery Analysis ===']); %#ok<*NBRAK>
@@ -80,8 +81,8 @@ disp('== Brain Extracting SPGR ==');
 if prog == 0
   disp('Using FSL BET...');
   eval(['!bet2 ' ref ' ' fullfile(dir.MASK, ['bet_fa' flipstr]) ' -m -r 90 -n -f ' num2str(THRESH_OM)  ' -g ' num2str(THRESH_G) ' -t']);
-  eval(['!gunzip ' fullfile(dir.MASK, ['bet_fa' flipstr '_mask.nii.gz'])]);
-  status.maskname = ['bet_fa' flipstr '_mask.nii'];
+  %V5.0 - Don't unzip FSL mask eval(['!gunzip ' fullfile(dir.MASK, ['bet_fa' flipstr '_mask.nii.gz'])]);
+  status.maskname = ['bet_fa' flipstr '_mask.nii.gz'];
 
 elseif prog == 1
   disp('Using AFNI 3dSkullStrip...');

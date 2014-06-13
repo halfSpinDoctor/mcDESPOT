@@ -12,7 +12,7 @@
 %    IMPLICIT: New directory called singleComponent
 %
 % Samuel A. Hurley
-% v5.0 05-Mar-2014
+% v5.1 05-Mar-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)     (Sept-2010)
@@ -26,7 +26,7 @@
 %            Added support for Bloch-Siegert FA map
 %     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
 %            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
-%            is set.
+%            is set. (Mar 2014)
 
 function [] = run_despot1()
 
@@ -34,7 +34,7 @@ function [] = run_despot1()
 diary('_mcdespot_log.txt');
 
 % Display Banner
-VER     = 5.0;
+VER     = 5.1;
 VERDATE = '05-Mar-2014';
 
 % Display banner

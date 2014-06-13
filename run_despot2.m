@@ -30,8 +30,8 @@ function [] = run_despot2()
 diary('_mcdespot_log.txt');
 
 % Display Banner
-VER     = 3.1;
-VERDATE = '29-Feb-2012';
+VER     = 5.1;
+VERDATE = '30-Apr-2014';
 
 % Display banner
 disp(['=== cpMCDESPOT - Multicomponent Relaxomtery Analysis ===']);
