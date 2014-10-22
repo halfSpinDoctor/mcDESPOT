@@ -19,7 +19,7 @@
  * Based on Sean Deoni's mcDESPOT C-Code, with additions from John Ollinger for matrix exponential
  * Based on Deoni MRM 2012 Note on 3-Pool Model
  *
- * MATLAB COMPILE COMMAND (R2009b, GLNX): mex CFLAGS="\$CFLAGS -std=c99" -lm -lpthread cpMCDESPOT_residuals_SAH.c
+ * MATLAB COMPILE COMMAND (R2009b, GLNX): mex CFLAGS="\$CFLAGS -std=c99" -Dchar16_t=uint16_T -lm -lpthread cpMCDESPOT_residuals_SAH.c
  *
  * Samuel A. Hurley
  * University of Wisconsin
