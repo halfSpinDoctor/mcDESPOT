@@ -36,6 +36,7 @@
 %     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
 %            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
 %            is set.) (Apr-2014)
+%     v5.2 - Write out residual as well as maps to NIfTI
 
 function [] = run_mcdespot(slices)
 tic;
@@ -252,13 +253,22 @@ disp(['Processing Run Complete: ' datetime()]);
 send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' datetime()]);
 
 %% Write out to NIfTI
+
+% Reference image (for header info)
+if status.coreg == 0
+  refHdr = [dir.BASE  dir.SPGR 'spgr_01.nii'];
+elseif status.coreg == 1
+  refHdr = [dir.COREG dir.SPGR 'spgr_01.nii'];
+end
+
 % Save NIfTI
-img_nifti_to_nifti(mcd_fv(:,:,:,1), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T1m']);
-img_nifti_to_nifti(mcd_fv(:,:,:,2), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T1f']);
-img_nifti_to_nifti(mcd_fv(:,:,:,3), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T2m']);
-img_nifti_to_nifti(mcd_fv(:,:,:,4), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-T2f']);
-img_nifti_to_nifti(mcd_fv(:,:,:,5), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-MWF']);
-img_nifti_to_nifti(mcd_fv(:,:,:,6), [dir.BASE dir.SPGR 'spgr_01.nii'] ,[dir.MCDESPOT 'mcDESPOT-Tau']);
+img_nifti_to_nifti(mcd_fv(:,:,:,1), refHdr, [dir.MCDESPOT 'mcDESPOT-T1m' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,2), refHdr, [dir.MCDESPOT 'mcDESPOT-T1f' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,3), refHdr, [dir.MCDESPOT 'mcDESPOT-T2m' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,4), refHdr, [dir.MCDESPOT 'mcDESPOT-T2f' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,5), refHdr, [dir.MCDESPOT 'mcDESPOT-MWF' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,6), refHdr, [dir.MCDESPOT 'mcDESPOT-Tau' ]);
+img_nifti_to_nifti(mcd_rnrm       , refHdr, [dir.MCDESPOT 'mcDESPOT-Rnrm']);
 
 
 %%

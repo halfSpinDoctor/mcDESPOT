@@ -148,7 +148,7 @@ if debug > 0
 end
 
 % III. Perform DESPOT1-HIFI Fit in Each Voxel
-for ii = find(~(sum(data, 2) == 0))'
+for ii = find(~(sum(data, 2) == 0))';
   % Grab voxel data
   vox_data    = data(ii,:);
   vox_data_ir = data_ir(ii,:);
@@ -209,7 +209,7 @@ progressbar(1);
 toc;
 
 % IV. DESPOT1-HIFI Model Function
-  function res = despot1hifi_model(fam_guess, dbgmode) %#ok<INUSD>
+  function res = despot1hifi_model(fam_guess,  dbgmode) %#ok<INUSD>
     
     % Flip angle terms
     sina = sin(alpha.*fam_guess);

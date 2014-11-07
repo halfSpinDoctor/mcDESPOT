@@ -296,7 +296,7 @@ end
 if afi_flag == 0
   % Check that IR was setup for this sequence
   if ti_irspgr == 0
-    error('IR was disabled for IR-SPGR, or the SPGR and IR-SPGR sequences are mixed up.');
+    warning('IR was disabled for IR-SPGR, or the SPGR and IR-SPGR sequences are mixed up.');
   end
   
   % Check that SPGR-IRSPGR and two SSFP have same R1/R2/TG

@@ -12,7 +12,7 @@
 %    IMPLICIT: New directory called singleComponent
 %
 % Samuel A. Hurley
-% v5.1 30-Apr-2014
+% v5.2 17-Jun-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands) (Jun-2011)
@@ -21,6 +21,7 @@
 %     v5.1 - Use [dir.BASE dir.SPGR 'spgr_01'] instead of info_spgr for writing out
 %            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
 %            is set.) (Apr-2014)
+%     v5.2 - Take abs of PD to fix negative-valued pixels in DESPOT2-PD map (Jun-2014)
 
 
 
@@ -127,17 +128,27 @@ opts.debug = 0;
 warning on %#ok<WNON>
 diary('_mcdespot_log.txt');
 
+% v5.2 Take magnituide of PD (fix for the fact that positive and negative PD values give equivalent fit)
+pd = abs(pd);
+
 % Rehape Results
 r2  =   reshape(r2,    [dataSize(1) dataSize(2) dataSize(3)]);
 pd  =   reshape(pd,    [dataSize(1) dataSize(2) dataSize(3)]);
 omega = reshape(omega, [dataSize(1) dataSize(2) dataSize(3)]);
 rnrm  = reshape(rnrm,  [dataSize(1) dataSize(2) dataSize(3)]);
 
+% Reference image (for header info)
+if status.coreg == 0
+  refHdr = [dir.BASE  dir.SPGR 'spgr_01.nii'];
+elseif status.coreg == 1
+  refHdr = [dir.COREG dir.SPGR 'spgr_01.nii'];
+end
+
 % Save NIfTI
-img_nifti_to_nifti(iminv(r2), [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-T2']);
-img_nifti_to_nifti(omega,     [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-Omega']);
-img_nifti_to_nifti(pd,        [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-PD']);
-img_nifti_to_nifti(rnrm,      [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT2-Rnrm']);
+img_nifti_to_nifti(iminv(r2), refHdr, [dir.DESPOT1 'DESPOT2-T2']);
+img_nifti_to_nifti(omega,     refHdr, [dir.DESPOT1 'DESPOT2-Omega']);
+img_nifti_to_nifti(pd,        refHdr, [dir.DESPOT1 'DESPOT2-PD']);
+img_nifti_to_nifti(rnrm,      refHdr, [dir.DESPOT1 'DESPOT2-Rnrm']);
 
 % Plot the center slice
 centerSlice = round(dataSize(3) / 2);

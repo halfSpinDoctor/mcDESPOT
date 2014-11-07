@@ -21,7 +21,7 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v4.2 09-Feb-2011
+% v4.4 7-Oct-2014
 %
 % Chagelog:
 %        v1.0 20-Oct-2009 - Initial Relase
@@ -35,9 +35,9 @@
 %                           (fixed TE=TR/2 error)
 %        V4.3 16-Oct-2011 - Now outputs 6 parameters (since PD and Omega's all work from singleComponant fitting now).
 %                           Reverted from fminsearch back to Sean's algorithm.
+%        V4.4  7-Oct-2014  - Updated to match updated mcDESPOT_residuals_SAH
 
-function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
-
+function [fv rnrm] = mcdespot_model_fit_fminsearch(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
 tic;
 
 %% O. Optimization Settings
@@ -46,6 +46,11 @@ optim = optimset('fminsearch');
 optim.TolFun  = 1e-4;
 optim.TolX    = 1e-4;
 optim.Display = 'none';
+
+% Weighting for residuals
+SPGRWEIGHT      = 2.75;
+SSFPWEIGHT_HIGH = 2.15;
+SSFPWEIGHT_LOW  = 0.45;
 
 % Apply fmap B1 correction to flip angles
 alpha_spgr = fam * alpha_spgr;
@@ -96,8 +101,28 @@ toc;
 
 %% Wrapper for C-Code
   function res = mcdespot_model(x)
-    [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH([x(1:6) vox_omega], vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1); % Extra 1 for tefix flag
-    res = resSPGR + resSSFP_0 + resSSFP_180;
+    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
+    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
+    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
+    
+    % Compute residual based on weighting
+    off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
+    
+    % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
+    
+    if vox_omega < off_res_range * 0.33
+      % Use SSFP-180 Only (SSFP-0 is zero signal)
+      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
+    elseif vox_omega < off_res_range * 0.50
+      % Use both, weight SSFP-180 Higher
+      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
+    elseif vox_omega < off_res_range * 0.66
+      % Use both, weight SSFP-0 Higher
+      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
+    else
+      % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
+      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
+    end
   end
 
 

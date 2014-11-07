@@ -54,9 +54,9 @@ CONTRACTION_STEPS      = 4;
 NUM_RANDOM_WALKS       = 50;
 NUM_SAMPLES            = 100;  % Must be 128 to match #threads/kernel on GPU
 
-% SIGNALSCALE = 1000;  % Hard-coded into GPU code
-% MAX_ALPHA_SPGR = 40; % Hard-coded into GPU code 
-% MAX_ALPHA_SSFP = 40; % Hard-coded into GPU code
+% SIGNALSCALE = 1000;  % Hard-coded into C code
+% MAX_ALPHA_SPGR = 40; % Hard-coded into C code 
+% MAX_ALPHA_SSFP = 40; % Hard-coded into C code
 
 % Weighting for residuals
 SPGRWEIGHT      = 2.75;

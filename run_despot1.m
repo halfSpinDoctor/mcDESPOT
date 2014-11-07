@@ -97,8 +97,11 @@ if afi_flag == 1
   
   % 3D Smooth /w Mask
   disp('3D Smoothing AFI FA Map');
-  fam_s = img_smooth_polyfit(fam,  mask, 3, 1);
-  rnrm  = zeros(size(fam_s));
+%   fam_s = img_smooth_polyfit(fam,  mask, 4, 1);
+%   rnrm  = zeros(size(fam_s));
+
+fam_s = fam;
+rnrm  = zeros(size(fam_s));
 
 %% Bloch-Siegert for FA Map
 elseif afi_flag == 2
@@ -106,7 +109,7 @@ elseif afi_flag == 2
   
   % 3D Smooth /w Mask
   disp('3D Smoothing AFI FA Map');
-  fam_s = img_smooth_polyfit(fam,  mask, 3, 1);
+  fam_s = img_smooth_polyfit(fam,  mask, 4, 1);
   rnrm  = zeros(size(fam_s));
   
   
@@ -121,27 +124,28 @@ else
   spgr   = spgr   ./ maxVal;
   irspgr = irspgr ./ maxVal;
   
-%   % Smoothing & Masking raw data before fitting
-%   disp('3D Smoothing data prior to fitting...');
-%   diary('off');
-%   spgr   = img_smooth_polyfit(spgr,   mask, 3, 1);
-%   irspgr = img_smooth_polyfit(irspgr, mask, 3, 1);
-%   diary('_mcdespot_log.txt');
+  % Smoothing & Masking raw data before fitting
+  disp('3D Smoothing data prior to fitting...');
+  diary('off');
+  spgr   = img_smooth_polyfit(spgr,   mask, 4, 1);
+  irspgr = img_smooth_polyfit(irspgr, mask, 4, 1);
+  diary('_mcdespot_log.txt');
 
   % DEBUG: Mask w/o Smoothing
-  spgr = spgr .* repmat(mask, [1 1 1 length(alpha_spgr)]);
+  % spgr = spgr .* repmat(mask, [1 1 1 length(alpha_spgr)]);
   
   %% Run DESPOT1-HIFI for B1 Map
   warning off %#ok<WNOFF>
   diary('off');
   opts.debug = 0;
-  [pd r1 fam rnrm] = despot1hifi_model_fit(reshape(spgr, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_spgr, tr_spgr, irspgr(:), alpha_irspgr, tr_irspgr, ti_irspgr/1000, npe_irspgr, opts); %#ok<ASGLU>
+  [pd r1 fam rnrm] = despot1hifi_model_fit_v2(reshape(spgr, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_spgr, tr_spgr, irspgr(:), alpha_irspgr, tr_irspgr, ti_irspgr/1000, npe_irspgr, opts); %#ok<ASGLU>
   warning on %#ok<WNON>
   diary('_mcdespot_log.txt');
   
   % Reshape Resulting FAM
   % Assume it is smooth enough from pre-smoothing fitted data
-  fam_s = abs(reshape(fam, [dataSize(1) dataSize(2) dataSize(3)]));
+  fam   =     reshape(fam, [dataSize(1) dataSize(2) dataSize(3)]);
+  fam_s =     abs(fam);
   rnrm  =     reshape(rnrm, [dataSize(1) dataSize(2) dataSize(3)]);
 end
 
@@ -158,6 +162,10 @@ spgr   = spgr .* repmat(mask, [1 1 1 length(alpha_spgr)]);
 spgr   = spgr   ./ maxVal;
 
 % Re-process using IRLS - 3 Iterations
+
+fam_s = ones(size(fam_s));
+
+
 warning off; %#ok<WNOFF>
 diary('off');
 [pd r1] = t1_fit_spgr_IRLS_afi(reshape(spgr, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_spgr, tr_spgr, fam_s(:), 3);
@@ -168,12 +176,19 @@ diary('_mcdespot_log.txt');
 r1  = reshape(r1,  [dataSize(1) dataSize(2) dataSize(3)]);
 pd  = reshape(pd,  [dataSize(1) dataSize(2) dataSize(3)]);
 
+% Reference image (for header info)
+if status.coreg == 0
+  refHdr = [dir.BASE  dir.SPGR 'spgr_01.nii'];
+elseif status.coreg == 1
+  refHdr = [dir.COREG dir.SPGR 'spgr_01.nii'];
+end
+
 % Save NIfTI
-img_nifti_to_nifti(iminv(r1), [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-T1']);
-img_nifti_to_nifti(fam_s,     [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-FAM']);
-img_nifti_to_nifti(fam,       [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-FAM_Unsmooth']);
-img_nifti_to_nifti(pd,        [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-PD']);
-img_nifti_to_nifti(rnrm,      [dir.BASE dir.SPGR 'spgr_01.nii'], [dir.DESPOT1 'DESPOT1-Rnrm']);
+img_nifti_to_nifti(iminv(r1), refHdr, [dir.DESPOT1 'DESPOT1-T1']);
+img_nifti_to_nifti(fam_s,     refHdr, [dir.DESPOT1 'DESPOT1-FAM']);
+img_nifti_to_nifti(fam,       refHdr, [dir.DESPOT1 'DESPOT1-FAM_Unsmooth']);
+img_nifti_to_nifti(pd,        refHdr, [dir.DESPOT1 'DESPOT1-PD']);
+img_nifti_to_nifti(rnrm,      refHdr, [dir.DESPOT1 'DESPOT1-Rnrm']);
 
 % Plot the center slice
 centerSlice = round(dataSize(3) / 2);
