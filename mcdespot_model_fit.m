@@ -99,7 +99,7 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   
   if debug == 0
     % Only show progressbar when not doing debugging
-    progressbar(pt/npts);
+%    progressbar(pt/npts);
   end
   pt = pt + 1;
     
@@ -132,10 +132,13 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     end
     
     % Compute residuals via CPU
-    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
-    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
-    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
     
+    % Old func call
+    [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(x', vox_omega, vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1);
+%     resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
+%     resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
+%     resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
+%     
 %     % DEBUG -- Equal To All 
 %     res = resSPGR + resSSFP_0 + resSSFP_180;
     
@@ -164,7 +167,64 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
 %     title(num2str(jj));
 %     legend('SPGR', 'SSFP-0', 'SSFP-180');
 %     pause(.5);
-    
+
+
+% DEBUG: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
+scatter(x(:,1), x(:,2), [], res, '+')
+set(gca, 'clim', [0 .001])
+xlabel 'T1_m'
+ylabel 'T1_f'
+colorbar;
+xlim([0.30 0.65]);
+ylim([0.50 1.50]);
+pause(.1);
+print -deps2 -r300
+eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
+pause;
+
+scatter(x(:,3), x(:,4), [], res, '+')
+set(gca, 'clim', [0 .001])
+xlabel 'T2_m'
+ylabel 'T2_f'
+colorbar;
+xlim([0.001 0.030]);
+ylim([0.050 0.165]);
+pause(.1);
+print -deps2 -r300
+eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
+pause;
+
+scatter(x(:,5), x(:,6), [], res, '+')
+set(gca, 'clim', [0 .001])
+xlabel 'MWF'
+ylabel 'Omega'
+colorbar;
+xlim([0.00 0.35]);
+ylim([0.025 0.60]);
+pause(.1);
+print -deps2 -r300
+eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
+pause;
+
+%% -- TMP TMP
+% 
+%     % T1m
+%     ig(1,:) = [0 0.30 0.65 0];
+%     % T1f
+%     ig(2,:) = [0 0.50 1.50 0];
+% 
+%     % T2m
+%     ig(3,:) = [0 .001 .030 0];
+%     % T2f
+%     ig(4,:) = [0 .050 .165 0];
+% 
+%     % MWF
+%     ig(5,:) = [0 0.00 0.35 0];
+%     % Tau
+%     ig(6,:) = [0 0.025 .60 0];
+
+%% -- TMP TMP
+
     % Sort residuals low->high
     [res idx] = sort(res);
     
