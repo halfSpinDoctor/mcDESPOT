@@ -5,3 +5,7 @@ src_deoni
 TCW
 *.mexa64
 *.mexmaci64
+SSFP_180_Tau_Res.avi
+validation/2_0/Run1/*.mat
+validation/2_0/Run4/*.mat
+validation/3_0/*.mat
