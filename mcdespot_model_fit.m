@@ -14,6 +14,12 @@
 %          fam                    - relative error in B1
 %          omega                  - off-resonance of B0 in Hz
 %          ig                     - Np x 4 initial guess variable [t1 t2 pd_spgr pd_ssfp]
+%          debug                  - flag to print debugging information
+%                                     0: Debugging off
+%                                     1: Show final estimate in a table
+%                                     2: Show fitted curve on top of data
+%                                     3: Show residual vectors for each contraction step
+%                                     4: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
 %
 % Outputs:
 %           fv [Np x 7] = [T1m T1f T2m T2f Fm Tau_m Omega]
@@ -88,7 +94,7 @@ pt   = 0;
 if debug == 0
   fprintf('mcDESPOT Fitting:');
 else
-  disp('mcDESPOT Fitting:');
+  disp(   'mcDESPOT Fitting:');
 end
 
 % Initialize Random Seed
@@ -99,7 +105,7 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   
   if debug == 0
     % Only show progressbar when not doing debugging
-%    progressbar(pt/npts);
+    progressbar(pt/npts);
   end
   pt = pt + 1;
     
@@ -132,15 +138,13 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     end
     
     % Compute residuals via CPU
-    
-    % Old func call
     [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(x', vox_omega, vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1);
-%     resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
-%     resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
-%     resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
-%     
-%     % DEBUG -- Equal To All 
-%     res = resSPGR + resSSFP_0 + resSSFP_180;
+    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
+    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
+    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
+    
+%   % DEBUG -- Equal To All 
+%   res = resSPGR + resSSFP_0 + resSSFP_180;
     
     % Compute residual based on weighting
     off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
@@ -161,69 +165,54 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
     end
     
-%    % DEBUG: Show residual vectors
-%     plot(1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSPGR, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_0, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_180);
-%     ylim([0 .1]);
-%     title(num2str(jj));
-%     legend('SPGR', 'SSFP-0', 'SSFP-180');
-%     pause(.5);
+    % DEBUG 3: Show residual vectors
+    if debug == 3
+      plot(1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSPGR, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_0, 1:(NUM_RANDOM_WALKS*NUM_SAMPLES), resSSFP_180);
+      ylim([0 .1]);
+      title(num2str(jj));
+      legend('SPGR', 'SSFP-0', 'SSFP-180');
+      pause(.5);
+    end
 
 
-% DEBUG: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
-scatter(x(:,1), x(:,2), [], res, '+')
-set(gca, 'clim', [0 .001])
-xlabel 'T1_m'
-ylabel 'T1_f'
-colorbar;
-xlim([0.30 0.65]);
-ylim([0.50 1.50]);
-pause(.1);
-print -deps2 -r300
-eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
-pause;
-
-scatter(x(:,3), x(:,4), [], res, '+')
-set(gca, 'clim', [0 .001])
-xlabel 'T2_m'
-ylabel 'T2_f'
-colorbar;
-xlim([0.001 0.030]);
-ylim([0.050 0.165]);
-pause(.1);
-print -deps2 -r300
-eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
-pause;
-
-scatter(x(:,5), x(:,6), [], res, '+')
-set(gca, 'clim', [0 .001])
-xlabel 'MWF'
-ylabel 'Omega'
-colorbar;
-xlim([0.00 0.35]);
-ylim([0.025 0.60]);
-pause(.1);
-print -deps2 -r300
-eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
-pause;
-
-%% -- TMP TMP
-% 
-%     % T1m
-%     ig(1,:) = [0 0.30 0.65 0];
-%     % T1f
-%     ig(2,:) = [0 0.50 1.50 0];
-% 
-%     % T2m
-%     ig(3,:) = [0 .001 .030 0];
-%     % T2f
-%     ig(4,:) = [0 .050 .165 0];
-% 
-%     % MWF
-%     ig(5,:) = [0 0.00 0.35 0];
-%     % Tau
-%     ig(6,:) = [0 0.025 .60 0];
-
-%% -- TMP TMP
+    % DEBUG 4: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
+    if debug == 4
+      scatter(x(:,1), x(:,2), [], res, '+')
+      set(gca, 'clim', [0 .001])
+      xlabel 'T1_m'
+      ylabel 'T1_f'
+      colorbar;
+      xlim([0.30 0.65]);
+      ylim([0.50 1.50]);
+      pause(.1);
+      print -deps2 -r300
+      eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
+      pause;
+      
+      scatter(x(:,3), x(:,4), [], res, '+')
+      set(gca, 'clim', [0 .001])
+      xlabel 'T2_m'
+      ylabel 'T2_f'
+      colorbar;
+      xlim([0.001 0.030]);
+      ylim([0.050 0.165]);
+      pause(.1);
+      print -deps2 -r300
+      eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
+      pause;
+      
+      scatter(x(:,5), x(:,6), [], res, '+')
+      set(gca, 'clim', [0 .001])
+      xlabel 'MWF'
+      ylabel 'Omega'
+      colorbar;
+      xlim([0.00 0.35]);
+      ylim([0.025 0.60]);
+      pause(.1);
+      print -deps2 -r300
+      eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
+      pause;
+    end
 
     % Sort residuals low->high
     [res idx] = sort(res);
@@ -233,21 +222,13 @@ pause;
       % Update mean, min, max, stdev based on top residuals
       idx = idx(1:RETAINED_TOP_RESIDUALS);
       guess = updateGuess(x(idx,:));
-      % guessStd(jj) = guess(5,1);
     end
     
   end % End contraction steps
   
-  
   % Return result as mean of top solutions
   idx   = idx(1:TOP_SOLUTION);
   guess = updateGuess(x(idx,:));
-  % guessStd(jj) = guess(5,1);
-  
-% % DEBUG: Plot Sigma of each GaussContract for MWF
-%   plot([1:7],guessStd);
-%   ylim([0 0.25]);
-%   drawnow;
   
   %% OPTIMIZATION STEP II: Use guess as initial guess for local optim (fminsearch)
   
@@ -258,13 +239,13 @@ pause;
   x = guess(:,1)';
   rnrm(ii) = res(1);
   
-  %% Output vector is fv, also return mean of top 5 residuals
+  % Output vector is fv, also return mean of top 5 residuals
   fv(ii, :)   = x;
   
-  %% DEBUG: Plot final fitted curve
+  %% DEBUG INFORMATION
   
   if debug == 1
-    if mod(debug_ctr, 10) == 0
+    if mod(debug_ctr, 10) == 0 % Show header every 10th output
       disp('----------|---------|-----------|---------|-----|--------|-------|---------');
       disp('T1 Myelin | T1 Free | T2 Myelin | T2 Free | MWF |  Tau   |  Res  |Progress');
       disp('----------|---------|-----------|---------|-----|--------|-------|---------');
@@ -305,35 +286,30 @@ toc;
 
 %% ------------------------ Helper Functions Below -------------------------
 
-% Wrapper for fminsearch call of mcDESPOT model
-  function res = mcdespot_model(x)
-    % Compute residuals via CPU
-    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
-    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
-    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
-      
-    % DEBUG: Completly Equal Wt
-    res = resSPGR + resSSFP_0 + resSSFP_180;
-    
-  end
 
-%% Initial Guess for 3.0T Magnet, human brain
+%% Initial Guess for 3.0T Magnet, human brain, old UW version
   function ig = initialGuess3T()
-    %         [mean  min  max  std]
+    % Note that only min and max are needed (because we are drawing from a flat
+    % distribution, not a Gaussian one.)
+    %
+    % Gaussian distribution for iteration #2+ will re-compute the mean and stdev
+    % on-the-fly
+    
+    %         [mean  min   max   std  ]
     % T1m
-    ig(1,:) = [0.50 0.30 0.70 0.05];
+    ig(1,:) = [0.50  0.30  0.70  0.050];
     % T1f
-    ig(2,:) = [1.40 0.80 2.80 0.200];
+    ig(2,:) = [1.40  0.80  2.80  0.200];
 
     % T2m
-    ig(3,:) = [.015 .001 .040 .005];
+    ig(3,:) = [.015  0.001 0.040 0.005];
     % T2f
-    ig(4,:) = [.080 .050 .140 .020];
+    ig(4,:) = [.080  0.050 0.140 0.020];
 
     % MWF
-    ig(5,:) = [.150 .001 .250 .100];
+    ig(5,:) = [.150  0.001 0.250 0.100];
     % Tau
-    ig(6,:) = [.120 .075 .250 .025];
+    ig(6,:) = [.120  0.075 0.250 0.025];
   end
 
 %% Initial Guess for 3.0T, SD MRM 2013 Preprint
@@ -344,41 +320,22 @@ toc;
     % Gaussian distribution for iteration #2+ will re-compute the mean and stdev
     % on-the-fly
     
-    %         [mean  min  max  std]
+    %         [mean  min     max   std]
     % T1m
-    ig(1,:) = [0 0.30 0.65 0];
+    ig(1,:) = [0     0.30    0.65  0];
     % T1f
-    ig(2,:) = [0 0.50 1.50 0];
+    ig(2,:) = [0     0.50    1.50  0];
 
     % T2m
-    ig(3,:) = [0 .001 .030 0];
+    ig(3,:) = [0     0.001   0.030 0];
     % T2f
-    ig(4,:) = [0 .050 .165 0];
+    ig(4,:) = [0     0.050   0.165 0];
 
     % MWF
-    ig(5,:) = [0 0.00 0.35 0];
+    ig(5,:) = [0     0.00    0.35  0];
     % Tau
-    ig(6,:) = [0 0.025 .60 0];
+    ig(6,:) = [0     0.025   0.60  0];
   end
-
-%% Generate guess points based on gaussian model, from initial guess
-
-% % DEBUG DEBUG -- make all pts the same
-% % Based on Gaussian distributions
-%   function pts = generatePoints(ig, nguess)
-% 
-%     % Preallocate x
-%     pts = zeros([nguess 6]);
-% 
-%     % For each paramter
-%     for  kk = 1:6
-%       % Mean + (random gaussian)*std
-%       tmp = ones([nguess 1])*ig(kk,1);
-% 
-%       pts(:,kk) = tmp;
-%     end
-% 
-%   end
 
 %% Based on Uniform distributions
   function pts = generatePointsUniform(ig, nguess)
@@ -394,13 +351,6 @@ toc;
       max = ig(kk,3);
 
       tmp = min + (max-min).*rand([nguess 1]);
-      
-%       if (debug > 0) && (kk == 5)
-%         hist(tmp,10);
-%         xlim([0 .4]);
-%         drawnow;
-%       end
-      
       pts(:,kk) = tmp;
     end
 
