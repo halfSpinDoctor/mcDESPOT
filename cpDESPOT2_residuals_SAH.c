@@ -26,6 +26,7 @@
  *    v1.0 - initial code, based on cpMCDESPOT_residuals_SAH.c
  *    v1.1 - fixed missing sqrt() in the tefix portion of the code (Jun-2011) 
  *    v2.0 - Refactor to allow arbitrary SSFP phase cycle to be selected
+ *    v5.0 - Skip v. 3,4 to match release version number.
  ***************************************************************************/
 
 /* Includes MEX for Matlab and Lib MATH headers */

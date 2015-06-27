@@ -56,7 +56,7 @@ else
 end
 
 % Starting time for DESPOT1
-time.despot1_start = datetime();
+time.despot1_start = datetime_stamp();
 disp(['DESPOT1 Started: ' time.despot1_start]);
 
 % Define singleComponant location
@@ -162,10 +162,6 @@ spgr   = spgr .* repmat(mask, [1 1 1 length(alpha_spgr)]);
 spgr   = spgr   ./ maxVal;
 
 % Re-process using IRLS - 3 Iterations
-
-fam_s = ones(size(fam_s));
-
-
 warning off; %#ok<WNOFF>
 diary('off');
 [pd r1] = t1_fit_spgr_IRLS_afi(reshape(spgr, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_spgr, tr_spgr, fam_s(:), 3);
@@ -215,7 +211,7 @@ title 'FAM Pre-smoothed from HIFI';
 % savefig([dir.DESPOT1 'DESPOT1-Result.tif']);
 
 % Done!
-time.despot1_end = datetime();
+time.despot1_end = datetime_stamp();
 disp(['DESPOT1-HIFI Complete: ' time.despot1_end]);
 
 % DESPOT1 Flag

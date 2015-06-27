@@ -53,7 +53,7 @@ else
 end
 
 % Starting time for coreg data
-time.despot2_start = datetime();
+time.despot2_start = datetime_stamp();
 disp(['DESPOT2-FM Started: ' time.despot2_start]);
 
 % Define singleComponant location
@@ -175,7 +175,7 @@ title 'Omega (B0 Map) [Hz]';
 % savefig([dir.DESPOT1 'DESPOT2-Result.tif']);
 
 % Done!
-time.despot2_end = datetime();
+time.despot2_end = datetime_stamp();
 disp(['DESPOT2-FM Complete: ' time.despot2_end]);
 
 % DESPOT2 Flag
