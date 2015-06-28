@@ -138,7 +138,6 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     end
     
     % Compute residuals via CPU
-    [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(x', vox_omega, vox_data_spgr, vox_data_ssfp_0, vox_data_ssfp_180, vox_alpha_spgr, vox_alpha_ssfp, tr_spgr, tr_ssfp, 1);
     resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
     resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
     resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
