@@ -47,6 +47,9 @@ function [pd r2 omega rnrm] = despot2fm_model_fit(data_0, data_180, alpha, tr, r
 
 tic;
 
+% Constant: Assumption of ratio of T2 to T1 for 1st pass
+T2_T1_RATIO = 0.060; % SHP brain ratio
+
 % Nelder-Mead Downhill Simplex (fminsearch)
 optim=optimset('fminsearch');
 optim.TolFun = 1e-4;
@@ -123,7 +126,7 @@ alpha = fam * alpha;
 % Convert to radians
 alpha    = alpha .* pi/180;
 
-% Preallocate output [pd r1 fam]
+% Preallocate output [pd r2 omega]
 pd    = zeros([size(data_0, 1) 1]);
 r2    = zeros([size(data_0, 1) 1]);
 omega = zeros([size(data_0, 1) 1]);
@@ -132,11 +135,10 @@ rnrm  = zeros([size(data_0, 1) 1]);
 % Number of non-zero data points
 npts = size(find(~(sum(data_0, 2) == 0)),1);
 pt   = 0;
-if debug == 0
-  fprintf('DESPOT2-FM Fitting:');
-else
-  % Extra newline for twaitbar
-  disp('DESPOT2-FM Fitting:');
+fprintf('DESPOT2-FM Fitting:');
+if debug > 0
+  % Padding for twaitbar
+  fprintf('                             ');
 end
 
 % III. Perform DESPOT2-FM Fit in Each Voxel
@@ -153,32 +155,30 @@ for ii = find(~(sum(data_0, 2) == 0))';
   if debug == 0
     progressbar(pt/npts);
   else
-    %twaitbar(pt/npts);
+    twaitbar(pt/npts);
   end
   pt = pt + 1;
  
-  
   % Minimize with Fminsearch
-  
   if ~exist('ext_omega', 'var');
     % Initial pass: fix T2, fit for initial guess of Omega
     % Fit for PD and Off-Res
     fix_flag = 1;
-    ig = [vox_pd_d1 10];                  % PD / Omega initial guess
-    t2_ig = 0.045 ./ vox_r1;              % Fix Tc2 based on T2*R1 ~= 0.045 (0.055 from Yarnykh NI2004)
-    x1 = fminsearch(@despot2fm_model, ig, optim);
+    ig = [vox_pd_d1 10];                   % PD / Omega initial guess
+    r2_ig = vox_r1 / T2_T1_RATIO;          % Fix T2 based on T2/T1 ~= 0.045 (0.055 from Yarnykh NI2004)
+    [x1 residual1] = fminsearch(@despot2fm_model, ig, optim);
   
     % Second pass - set omega IG from previous step
     fix_flag = 0;
-    ig = [x1(1) vox_r1/0.045 x1(2)];      % PD from X1, T2 = 0.045/R1ms, Omega from X1
+    ig = [x1(1) vox_r1/T2_T1_RATIO x1(2)]; % PD from X1, T2 = 0.045/R1ms, Omega from X1
     [x residual]   = fminsearch(@despot2fm_model, ig, optim);
     
   else
     % Single pass with fixed Omega (from ext B0 map)
-    vox_omega = ext_omega(ii);            % Grab ith voxel of external B0 map.
+    vox_omega = ext_omega(ii);             % Grab ith voxel of external B0 map.
     fix_flag  = 2;
     
-    ig = [vox_pd_d1 vox_r1/0.045];               % PD / T2 initial guess
+    ig = [vox_pd_d1 vox_r1/T2_T1_RATIO];   % PD / T2 initial guess
     [x residual]   = fminsearch(@despot2fm_model, ig, optim);
     x(3) = vox_omega;
   end
@@ -232,9 +232,9 @@ toc;
     
     % Setup FV Call
     if fix_flag == 1
-      fv = [x(1) 1./vox_r1 t2_ig x(2)];
+      fv = [x(1) 1./vox_r1 1./r2_ig  x(2)     ];
     elseif fix_flag == 0
-      fv = [x(1) 1./vox_r1 1./x(:,2) x(:,3)];
+      fv = [x(1) 1./vox_r1 1./x(:,2) x(:,3)   ];
     elseif fix_flag == 2
       fv = [x(1) 1./vox_r1 1./x(:,2) vox_omega];
     end
