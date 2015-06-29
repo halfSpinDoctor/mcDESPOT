@@ -124,7 +124,7 @@ end
 warning off %#ok<WNOFF>
 diary('off');
 opts.debug = 0;
-[pd r2 omega rnrm] = despot2fm_model_fit(reshape(ssfp_0, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), reshape(ssfp_180, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_ssfp, tr_ssfp, r1(:), pd(:), fam(:), opts);
+[pd r2 omega rnrm] = despot2fm_model_fit_v2(reshape(ssfp_0, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), reshape(ssfp_180, [dataSize(1)*dataSize(2)*dataSize(3) dataSize(4)]), alpha_ssfp, tr_ssfp, r1(:), pd(:), fam(:), opts);
 warning on %#ok<WNON>
 diary('_mcdespot_log.txt');
 
