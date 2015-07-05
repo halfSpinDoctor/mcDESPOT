@@ -1,4 +1,4 @@
-% Function [pd r2 omega rnrm] = despot2fm_model_fit(data_0, data_180, alpha, tr, r1, pd, fam, opts)
+% Function [pd r2 omega rnrm] = despot2fm_model_fit_v2(data_0, data_180, alpha, tr, r1, pd, fam, opts)
 %
 % Function to fit single-componant DESPOT2 model, including off-resonance effects
 % and extra term to account for TE
@@ -50,7 +50,7 @@ function [pd r2 omega rnrm] = despot2fm_model_fit_v2(data_0, data_180, alpha, tr
 tic;
 
 % Constant: Assumption of ratio of T2 to T1 for 1st pass
-T2_T1_RATIO = 0.060; % SHP brain ratio
+R1_R2_RATIO = 0.066; % SHP brain ratio, Yarhykh assumption is 22.2, or 1/0.045
 
 % Nelder-Mead Downhill Simplex (fminsearch)
 optim=optimset('fminsearch');
@@ -134,26 +134,20 @@ r2    = zeros([size(data_0, 1) 1]);
 omega = zeros([size(data_0, 1) 1]);
 rnrm  = zeros([size(data_0, 1) 1]);
 
-% Preallocate parfor output [pd r2 omega]
-pd_pf    = zeros([size(find(~(sum(data_0, 2) == 0))', 2) 1]);
-r2_pf    = zeros([size(find(~(sum(data_0, 2) == 0))', 2) 1]);
-omega_pf = zeros([size(find(~(sum(data_0, 2) == 0))', 2) 1]);
-rnrm_pf  = zeros([size(find(~(sum(data_0, 2) == 0))', 2) 1]);
-
-% Number of non-zero data points
 npts = size(find(~(sum(data_0, 2) == 0)),1);
-pt   = 0;
+
+% Preallocate parfor output [pd r2 omega]
+pd_pf    = zeros([npts 1]);
+r2_pf    = zeros([npts 1]);
+omega_pf = zeros([npts 1]);
+rnrm_pf  = zeros([npts 1]);
+
 fprintf('DESPOT2-FM Fitting:');
-if debug > 0
-  % Padding for twaitbar
-  fprintf('                             ');
-end
 
 % III. Perform DESPOT2-FM Fit in Each Voxel
 
 % Get non-zero voxels
 voxidx = find(~(sum(data_0, 2) == 0))';
-% parfor_progress(length(voxidx));
 
 parfor ii = 1:length(voxidx)
   
@@ -175,35 +169,32 @@ parfor ii = 1:length(voxidx)
   % -- FIRST PASS: fix T2, fit for initial guess of Omega --
   % Fit for PD and Off-Res: fix_flag = 1
   ig = [vox_pd_d1 10];                     % PD / Omega initial guess
-  r2_ig = vox_r1 / T2_T1_RATIO;            % Fix T2 based on T2/T1 ~= 0.045 (0.055 from Yarnykh NI2004)
-  despot2fm_model_handle = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 0,   vox_data_0',   vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x1] = fminsearch(despot2fm_model_handle, ig, optim);
+  r2_ig = vox_r1 / R1_R2_RATIO;            % Fix T2 based on T2/T1 ~= 0.045 (0.055 from Yarnykh NI2004)
+  despot2fm_model_handle_1 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 180, vox_data_180', vox_alpha', tr, 1)');
+  [x1] = fminsearch(despot2fm_model_handle_1, ig, optim);
 
   % -- SECOND PASS - set omega IG from previous step --
-  ig = [x1(1) vox_r1/T2_T1_RATIO x1(2)];   % PD from X1, T2 = 0.045/R1ms, Omega from X1
-  despot2fm_model_handle = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x1(2) x(3)], 0,   vox_data_0',   vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(:,2) x(:,3)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x2]   = fminsearch(despot2fm_model_handle, ig, optim);
+  ig = [x1(1) vox_r1/R1_R2_RATIO x1(2)];   % PD from X1, R2 = R1/0.045, Omega from X1
+  despot2fm_model_handle_2 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 180, vox_data_180', vox_alpha', tr, 1)');
+  [x2]   = fminsearch(despot2fm_model_handle_2, ig, optim);
   
   % -- THIRD PASS: fix T2, refine Omega --
   % Fit for PD and Off-Res: fix_flag = 1
   ig    = [x2(1) 10];                      % PD from X2, reinitalise Omega to 10
   r2_ig = x2(2);                           % Fix T2 based on X2
-  despot2fm_model_handle = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 0,   vox_data_0',   vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x3] = fminsearch(despot2fm_model_handle, ig, optim);
+  despot2fm_model_handle_3 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 180, vox_data_180', vox_alpha', tr, 1)');
+  [x3] = fminsearch(despot2fm_model_handle_3, ig, optim);
 
   % -- FOURTH PASS - set omega IG from previous step --
   ig = [x3(1) x2(2) x3(2)];                % PD from X3, T2 from X2, Omega from X3
-  despot2fm_model_handle = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) x(3)], 0,   vox_data_0',   vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(:,2) x(:,3)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x residual]   = fminsearch(despot2fm_model_handle, ig, optim);
+  despot2fm_model_handle_4 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 180, vox_data_180', vox_alpha', tr, 1)');
+  [x residual]   = fminsearch(despot2fm_model_handle_4, ig, optim);
   
   % Save results
   pd_pf(ii)    = x(1);
   r2_pf(ii)    = x(2);
   omega_pf(ii) = x(3);
   rnrm_pf(ii)  = residual;
-  
-  % Update parfor progressbar
-  % parfor_progress;
   
 %   % PLOT FOR DEBUGGING FINAL FIT RESULT
 %   <<REMOVED>>

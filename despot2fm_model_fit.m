@@ -48,7 +48,7 @@ function [pd r2 omega rnrm] = despot2fm_model_fit(data_0, data_180, alpha, tr, r
 tic;
 
 % Constant: Assumption of ratio of T2 to T1 for 1st pass
-T2_T1_RATIO = 0.060; % SHP brain ratio
+T2_T1_RATIO = 0.066; % SHP brain ratio, Yarhykh assumption is 22.2, or 1/0.045
 
 % Nelder-Mead Downhill Simplex (fminsearch)
 optim=optimset('fminsearch');
@@ -166,11 +166,11 @@ for ii = find(~(sum(data_0, 2) == 0))';
     fix_flag = 1;
     ig = [vox_pd_d1 10];                   % PD / Omega initial guess
     r2_ig = vox_r1 / T2_T1_RATIO;          % Fix T2 based on T2/T1 ~= 0.045 (0.055 from Yarnykh NI2004)
-    [x1 residual1] = fminsearch(@despot2fm_model, ig, optim);
+    [x1] = fminsearch(@despot2fm_model, ig, optim);
   
     % Second pass - set omega IG from previous step
     fix_flag = 0;
-    ig = [x1(1) vox_r1/T2_T1_RATIO x1(2)]; % PD from X1, T2 = 0.045/R1ms, Omega from X1
+    ig = [x1(1) vox_r1/T2_T1_RATIO x1(2)]; % PD from X1, R2 = R1/0.045, Omega from X1
     [x residual]   = fminsearch(@despot2fm_model, ig, optim);
     
   else

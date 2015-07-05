@@ -77,7 +77,7 @@ img.afi_02 = [];
 % Try to load single componant (T1 & FAM) maps as input to DESPOT2
 if isfield(status, 'despot1') && status.despot1 == 1 %#ok<NODEF>
   % Load PD, T1, & FA Maps
-  r1  = iminv(load_nifti([dir.DESPOT1 'DESPOT1-T1.nii' ]));
+  r1  = iminv(load_nifti([dir.DESPOT1 'DESPOT1-T1.nii' ])); % R1 = inverse of T1
   pd  =       load_nifti([dir.DESPOT1 'DESPOT1-PD.nii' ]);
   fam =       load_nifti([dir.DESPOT1 'DESPOT1-FAM.nii']);
 else
