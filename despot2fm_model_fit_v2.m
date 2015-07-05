@@ -151,10 +151,11 @@ voxidx = find(~(sum(data_0, 2) == 0))';
 
 parfor ii = 1:length(voxidx)
   
+  % Get parfor index
   ii_pf = voxidx(ii);
   
   % Grab voxel data
-  vox_data_0   = data_0(ii_pf,:);
+  vox_data_0   = data_0(ii_pf,:);     %#ok<*PFBNS>
   vox_data_180 = data_180(ii_pf,:);
   
   vox_alpha    = alpha(ii_pf, :);
@@ -178,22 +179,47 @@ parfor ii = 1:length(voxidx)
   despot2fm_model_handle_2 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 180, vox_data_180', vox_alpha', tr, 1)');
   [x2]   = fminsearch(despot2fm_model_handle_2, ig, optim);
   
-  % -- THIRD PASS: fix T2, refine Omega --
-  % Fit for PD and Off-Res: fix_flag = 1
-  ig    = [x2(1) 10];                      % PD from X2, reinitalise Omega to 10
-  r2_ig = x2(2);                           % Fix T2 based on X2
-  despot2fm_model_handle_3 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./r2_ig x(2)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x3] = fminsearch(despot2fm_model_handle_3, ig, optim);
+  % Save results
+  pd_pf(ii)    = x2(1);
+  r2_pf(ii)    = x2(2);
+  omega_pf(ii) = x2(3);
+  
+end
 
-  % -- FOURTH PASS - set omega IG from previous step --
-  ig = [x3(1) x2(2) x3(2)];                % PD from X3, T2 from X2, Omega from X3
-  despot2fm_model_handle_4 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2)  x(3)], 180, vox_data_180', vox_alpha', tr, 1)');
-  [x residual]   = fminsearch(despot2fm_model_handle_4, ig, optim);
+% Expand output variables
+pd(voxidx)    = pd_pf;
+r2(voxidx)    = r2_pf;
+omega(voxidx) = omega_pf;
+
+% Apply 3x3x3 3D median filter to Omega estimate
+omega_mf3     = medfilt3(omega, [3 3 3]);
+
+
+parfor ii = 1:length(voxidx)
+  
+  % Get parfor index
+  ii_pf = voxidx(ii);
+  
+  % Grab voxel data
+  vox_data_0   = data_0(ii_pf,:);
+  vox_data_180 = data_180(ii_pf,:);
+  
+  vox_alpha    = alpha(ii_pf, :);
+  vox_r1       = r1(ii_pf);
+  vox_omega    = omega_mf3(ii_pf);  % Use median-filtered omega as fixed parameter
+  
+  vox_pd_ig    = pd(ii_pf);
+  vox_r2_ig    = r2(ii_pf);
+
+  % -- THIRD PASS - fixed vox_omega_ig from median filter --
+  ig = [vox_pd_ig vox_r2_ig];    % Initial guess: PD from X2, R2 from X2, Omega from median filtered image
+  despot2fm_model_handle_3 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) vox_omega], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) vox_omega], 180, vox_data_180', vox_alpha', tr, 1)');
+  [x residual]   = fminsearch(despot2fm_model_handle_3, ig, optim);
   
   % Save results
   pd_pf(ii)    = x(1);
   r2_pf(ii)    = x(2);
-  omega_pf(ii) = x(3);
+  omega_pf(ii) = vox_omega;
   rnrm_pf(ii)  = residual;
   
 %   % PLOT FOR DEBUGGING FINAL FIT RESULT
