@@ -142,7 +142,7 @@ r2_pf    = zeros([npts 1]);
 omega_pf = zeros([npts 1]);
 rnrm_pf  = zeros([npts 1]);
 
-fprintf('DESPOT2-FM Fitting:');
+fprintf('DESPOT2-FM Fitting:...');
 
 % III. Perform DESPOT2-FM Fit in Each Voxel
 
@@ -191,8 +191,12 @@ pd(voxidx)    = pd_pf;
 r2(voxidx)    = r2_pf;
 omega(voxidx) = omega_pf;
 
+fprintf('First 2 iterations complete...applying median filter...');
+
 % Apply 3x3x3 3D median filter to Omega estimate
-omega_mf3     = medfilt3(omega, [3 3 3]);
+omega_mf5     = medfilt3(omega, [5 5 5]);
+
+fprintf('median filtering complete...running last iteration...');
 
 
 parfor ii = 1:length(voxidx)
@@ -206,20 +210,20 @@ parfor ii = 1:length(voxidx)
   
   vox_alpha    = alpha(ii_pf, :);
   vox_r1       = r1(ii_pf);
-  vox_omega    = omega_mf3(ii_pf);  % Use median-filtered omega as fixed parameter
   
   vox_pd_ig    = pd(ii_pf);
   vox_r2_ig    = r2(ii_pf);
+  vox_omega_ig = omega_mf5(ii_pf);
 
-  % -- THIRD PASS - fixed vox_omega_ig from median filter --
-  ig = [vox_pd_ig vox_r2_ig];    % Initial guess: PD from X2, R2 from X2, Omega from median filtered image
-  despot2fm_model_handle_3 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) vox_omega], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) vox_omega], 180, vox_data_180', vox_alpha', tr, 1)');
+  % -- THIRD PASS - re-run second pass, with median filtered omega as ig --
+  ig = [vox_pd_ig vox_r2_ig vox_omega_ig];    % Initial guess: PD from X2, R2 from X2, Omega from median filtered image
+  despot2fm_model_handle_3 = @(x)(cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) x(3)], 0, vox_data_0', vox_alpha', tr, 1)' + cpDESPOT2_residuals_SAH([x(1) 1./vox_r1 1./x(2) x(3)], 180, vox_data_180', vox_alpha', tr, 1)');
   [x residual]   = fminsearch(despot2fm_model_handle_3, ig, optim);
   
   % Save results
   pd_pf(ii)    = x(1);
   r2_pf(ii)    = x(2);
-  omega_pf(ii) = vox_omega;
+  omega_pf(ii) = x(3);
   rnrm_pf(ii)  = residual;
   
 %   % PLOT FOR DEBUGGING FINAL FIT RESULT
@@ -237,7 +241,7 @@ omega(voxidx) = omega_pf;
 rnrm(voxidx)  = rnrm_pf;
 
 % Done.
-progressbar(1);
+disp('...fitting complete.');
 toc;
 
 % % IV. DESPOT2-FM C-Function Wrapper
