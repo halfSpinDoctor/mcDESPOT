@@ -71,6 +71,9 @@ disp('========================================================');
 % Load in mcdespot settings file
 load _mcdespot_settings
 
+% Define multiComponant location
+dir.MCDESPOT = './multiComponent/';
+mkdir(dir.MCDESPOT);
 
 % Check if the processing was run before
 if isfield(status, 'mcdespot') && status.mcdespot > 0 %#ok<NODEF>
@@ -80,10 +83,6 @@ else
   status.comment  = [];
   time.mcdespot_start = [];
   time.mcdespot_end   = [];
-  
-  % Define multiComponant location
-  dir.MCDESPOT = './multiComponent/';
-  mkdir(dir.MCDESPOT);
 end
 
 disp(['Processing Run #' num2str(status.mcdespot)]);
