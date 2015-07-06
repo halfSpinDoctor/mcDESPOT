@@ -60,14 +60,16 @@ CONTRACTION_STEPS      = 4;
 NUM_RANDOM_WALKS       = 50;
 NUM_SAMPLES            = 100;  % Must be 128 to match #threads/kernel on GPU
 
+DEG_TO_RAD             = pi/180;
+
 % SIGNALSCALE = 1000;  % Hard-coded into C code
 % MAX_ALPHA_SPGR = 40; % Hard-coded into C code 
 % MAX_ALPHA_SSFP = 40; % Hard-coded into C code
 
 % Weighting for residuals
-SPGRWEIGHT      = 2.75;
-SSFPWEIGHT_HIGH = 2.15;
-SSFPWEIGHT_LOW  = 0.45;
+SPGRWEIGHT      = 1.05; % 2.75
+SSFPWEIGHT_HIGH = 1.00; % 2.15
+SSFPWEIGHT_LOW  = 1.00; % 0.45
 
 % Nelder-Mead Downhill Simplex (fminsearch)
 optim=optimset('fminsearch');
@@ -111,11 +113,9 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     
   % Grab SPGR & SSFP Data For the current voxel, normalize by proton density
   % *Transpose data because C-routine indexies via column vectors
-  warning off;
   vox_data_spgr     = data_spgr(ii,:)'     ./ ig(ii,3);
   vox_data_ssfp_0   = data_ssfp_0(ii,:)'   ./ ig(ii,4);
   vox_data_ssfp_180 = data_ssfp_180(ii,:)' ./ ig(ii,4);
-  warning on;
 
   % Grab flip angles for current voxel
   vox_alpha_spgr    = alpha_spgr(ii,:)';
@@ -142,27 +142,33 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
     resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
     
-%   % DEBUG -- Equal To All 
-%   res = resSPGR + resSSFP_0 + resSSFP_180;
+    % Weight residuals smoothly based on off-resonance map supplied from DESPOT2-HFI
+    PSI    = tr_ssfp * vox_omega * 2*pi;
+    WT_180 = sin((180*DEG_TO_RAD + PSI)./2).^2;
+    WT_000 = sin((  0*DEG_TO_RAD + PSI)./2).^2;
     
-    % Compute residual based on weighting
-    off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
+    res    = SPGRWEIGHT * resSPGR + WT_180 * resSSFP_180 + WT_000 * resSSFP_0;
     
-    % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
-    
-    if vox_omega < off_res_range * 0.33
-      % Use SSFP-180 Only (SSFP-0 is zero signal)
-      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
-    elseif vox_omega < off_res_range * 0.50
-      % Use both, weight SSFP-180 Higher
-      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
-    elseif vox_omega < off_res_range * 0.66
-      % Use both, weight SSFP-0 Higher
-      res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
-    else
-      % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
-      res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
-    end
+%    % Discrete Weights
+%
+%    % Compute residual based on weighting
+%    off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
+
+%     % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
+% 
+%     if vox_omega < off_res_range * 0.33
+%       % Use SSFP-180 Only (SSFP-0 is zero signal)
+%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
+%     elseif vox_omega < off_res_range * 0.50
+%       % Use both, weight SSFP-180 Higher
+%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
+%     elseif vox_omega < off_res_range * 0.66
+%       % Use both, weight SSFP-0 Higher
+%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
+%     else
+%       % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
+%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
+%     end
     
     % DEBUG 3: Show residual vectors
     if debug == 3
@@ -232,13 +238,13 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   %% OPTIMIZATION STEP II: Use guess as initial guess for local optim (fminsearch)
   
   % Gaussian Contraction + FMINSEARCH
-  % [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
+  [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
 
-  % Gaussian Contraction Only
-  x = guess(:,1)';
-  rnrm(ii) = res(1);
+%   % Gaussian Contraction Only
+%   x = guess(:,1)';
+%   rnrm(ii) = res(1);
   
-  % Output vector is fv, also return mean of top 5 residuals
+  % Output vector is fv
   fv(ii, :)   = x;
   
   %% DEBUG INFORMATION
