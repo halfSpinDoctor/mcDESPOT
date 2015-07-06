@@ -23,7 +23,8 @@
  *
  * Samuel A. Hurley
  * University of Wisconsin
- * v5.0 1-Nov-2012
+ * University of Oxford
+ * v5.1 6-Jul-2015
  *
  * Changelog:
  *    v1.0 - initial code, based on gpMCDESPOT_residual
@@ -40,6 +41,7 @@
  *    v4.4 - Fixed p-threads bug if #of FV is not evenly divisible by NUM_THREADS (Feb-2012)
  *    v5.0 - Drastically re-structured code. Added support for 3-pool model. Now only computes
  *           a single residual at a time (based on ssfpPhase variable: -1 == SPGR) (Nov-2012)
+ *    v5.1 - Fixed integer abs operation being called on floating point data. abs->fabs (Jul-2015)
  ***************************************************************************/
 
 /* Includes MEX for Matlab and Lib MATH headers */
@@ -51,9 +53,10 @@
 #include "cpMCDESPOT_residuals_SAH.h"
 
 // Debug Flag (Crashes PTHREAD Version)
+// #define DEBUG_FLAG_X
 
 // Number of multithreads
-#define NUM_THREADS 8
+// #define NUM_THREADS 4
 
 // Define maximum number of data points we can have,
 // in order to use constant memory effectively
@@ -96,10 +99,6 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   // Size of data vectors in memory
   size_t dataSize;
   
-  // Number of threads for multithreading
-  pthread_t  threads[NUM_THREADS];
-  thread_arg targ[NUM_THREADS];
-  
   // --- Host Data --- //
   // Parameter vector
   double **fv;
@@ -113,14 +112,16 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   double *tr;
   double *model;
   
+  double *numThreads;
+  
   // Residual solutions
   double *res;
   
   /* I. Error checking ****************************************************************/
   
-  // Check for 7 inputs
-  if (nrhs != 7)
-    mexErrMsgTxt("Requires 7 inputs: [fv omega phaseCycle data alpha tr model]");
+  // Check for 8 inputs
+  if (nrhs != 8)
+    mexErrMsgTxt("Requires 8 inputs: [fv omega phaseCycle data alpha tr model numThreads]");
   
   // Check for 1 output
   if (nlhs != 1)
@@ -155,6 +156,10 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   if (mxGetN(prhs[6]) !=1)
     mexErrMsgTxt("Model must be a scalar");
   
+  // Check that num_threads is a scalar
+  if (mxGetN(prhs[7]) !=1)
+    mexErrMsgTxt("Number of threads must be a scalar");
+  
   /* II. Load In Data *******************************************************/
   
   // Alloc Param Vector
@@ -185,10 +190,16 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   alpha         = mxGetPr(prhs[4]);
   tr            = mxGetPr(prhs[5]);
   model         = mxGetPr(prhs[6]);
+  numThreads    = mxGetPr(prhs[7]);
   
   // Check Model
   if (!(model[0] == 0.0 || model[0] == 1.0 || model[0] == 2.0)) {
     mexErrMsgTxt("Error: model must be 0/1/2 (2-pool, 2-pool /w TE correction, 2+1 pool)");
+  }
+  
+  // Check number of threads
+  if (numThreads[0] <= 0.0) {
+    mexErrMsgTxt("Error: number of threads must be 1 or greater)");
   }
   
   // Check Data Size
@@ -209,6 +220,13 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   }
   
   /* III. Compute Residuals *****************************************************/
+  
+  // Assign previously #defined number of threads
+  int NUM_THREADS = (int) numThreads[0];
+  
+  // Number of threads for multithreading
+  pthread_t  threads[NUM_THREADS];
+  thread_arg targ[NUM_THREADS];
   
   // Determine the chunk size
   int chunkSize = nParam / NUM_THREADS;
@@ -274,6 +292,8 @@ void *threadFunc(void *arg) {
       calcSSFP(fv[i], &res[i], d_phaseCycle[0]*DEG_TO_RAD);
     }
   }
+  
+  return NULL;
 }
 
 /************SPGR Signal Calculation**************/
@@ -854,10 +874,10 @@ void matrixGeneralInverse6by6(double A[][6], double B[], double X[])
   
   for (k=0; k<size-1; k++) {
     p = k;
-    maxValue = abs(A[k][k]);
+    maxValue = fabs(A[k][k]);
     // scan the lower part of this column
     for (i=k; i<size; i++) {
-      pointValue = abs(A[k][i]);
+      pointValue = fabs(A[k][i]);
       if (pointValue > maxValue) {
         maxValue = pointValue;
         p = i;

@@ -19,7 +19,8 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v5.1 30-Apr-2014
+% University of Oxford
+% v5.3 6-Jul-2015
 %
 % Changelog:
 %     v1.0 - added options for coregistered data               (Jan-2010)
@@ -37,6 +38,9 @@
 %            new NIfTI file headers. (Avoids FSL orientation mis-label if flags.reorient
 %            is set.) (Apr-2014)
 %     v5.2 - Write out residual as well as maps to NIfTI
+%     v5.3 - Cleanup multislice processing to skip slices without masked signal.
+%            Change mcdespot_model_fit call to include number of pthreads to use
+%            (Jul-2015)
 
 function [] = run_mcdespot(slices)
 tic;
@@ -45,8 +49,8 @@ tic;
 diary('_mcdespot_log.txt');
 clc;
 
-VER = 5.1;
-VERDATE = '30-Apr-2014';
+VER = 5.3;
+VERDATE = '6-Jul-2015';
 
 % E-mail Notification When Processing is Complete
 NOTIFY_EMAIL = 'shurley@wisc.edu';            % Sam's Wiscmail
@@ -89,8 +93,8 @@ disp(['Processing Run #' num2str(status.mcdespot)]);
 comment = ' ';
 
 % Starting time for processing
-time.mcdespot_start = strvcat(time.mcdespot_start, datetime());  %#ok<REMFF1>
-disp(['Processing Run Started: ' datetime()]);
+time.mcdespot_start = strvcat(time.mcdespot_start, datetime_stamp());
+disp(['Processing Run Started: ' datetime_stamp()]);
 
 % Load mcDESPOT Images
 % load_mcdespot_series will choose the coreg data, if it exists
@@ -182,7 +186,7 @@ end
 % title 'Images to Process';
 
 %% Save the run status before processing begins
-status.comment                     = 'Standard mcDESPOT Processing'; %#ok<VCAT>
+status.comment                     = 'Standard mcDESPOT Processing';
 status.nsliceproc(status.mcdespot) = 0;
 
 % Determine array size
@@ -194,63 +198,70 @@ nslices = size(data_spgr, 3);
 mcd_fv   = zeros([sizex sizey nslices 6]);
 mcd_rnrm = zeros([sizex sizey nslices  ]);
 
+%% Determine number of threads for parallel processing of mcDESPOT residuals
+numThreads = feature('NumCores');
+% numThreads = 4; % Force 4 to be used
+
 %% Loop Over Slices, so if it crashes we don't loose all the data
 for ii = 1:nslices
-  disp(['Working on slice #' num2str(ii) ' / ' num2str(nslices)]);
   
-  % Grab top slice off of stack
-  data_spgr_sl     = reshape(data_spgr(:,:,1,:),     [sizex*sizey length(alpha_spgr)]);
-  data_ssfp_0_sl   = reshape(data_ssfp_0(:,:,1,:),   [sizex*sizey length(alpha_ssfp)]);
-  data_ssfp_180_sl = reshape(data_ssfp_180(:,:,1,:), [sizex*sizey length(alpha_ssfp)]);
-  pd_spgr_sl       = pd_spgr(:,:,1);
-  pd_ssfp_sl       = pd_ssfp(:,:,1);
-  t1_sl            = t1(:,:,1);
-  t2_sl            = t2(:,:,1);
-  fam_sl           = fam(:,:,1);
-  omega_sl         = omega(:,:,1);
+  % Grab slice data
+  data_spgr_sl     = reshape(data_spgr(:,:,ii,:),     [sizex*sizey length(alpha_spgr)]);
   
-  % Remove top slice to free up memory, then the next slice will be processed next
-  data_spgr(:,:,1,:)     = [];
-  data_ssfp_0(:,:,1,:)   = [];
-  data_ssfp_180(:,:,1,:) = [];
-  pd_spgr(:,:,1)         = [];
-  pd_ssfp(:,:,1)         = [];
-  t1(:,:,1)              = [];
-  t2(:,:,1)              = [];
-  fam(:,:,1)             = [];
-  omega(:,:,1)           = [];
-  
-  % Formulate initial guess vector
-  ig = [t1_sl(:) t2_sl(:) pd_spgr_sl(:) abs(pd_ssfp_sl(:))];
-  
-  diary('off');
-  [fv rnrm] = mcdespot_model_fit(data_spgr_sl, data_ssfp_0_sl, data_ssfp_180_sl, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam_sl(:), omega_sl(:), ig, DEBUG);
-  diary('_mcdespot_log.txt');
-  
-  % Reshape outputs
-  slicenum = ii + (slices(1) - 1);
-  mcd_fv(:,:,slicenum,:)   = reshape(fv,   [sizex sizey 1 6]);      
-  mcd_rnrm(:,:,slicenum)   = reshape(rnrm, [sizex sizey 1  ]);        
-  
-  % Display the time the slice finished
-  disp(['Slice Complete: ' datetime()]);
-  
-  % Save data after each slice, in case of a crash
-  save(['mcdespot_run' num2str(status.mcdespot,'%02.0f')], 'mcd_fv', 'mcd_rnrm');
-  status.nsliceproc(status.mcdespot) = status.nsliceproc(status.mcdespot) + 1;
-  
-  save('_mcdespot_settings', 'tr_spgr', 'tr_irspgr', 'tr_ssfp', 'flags', ...
-     'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
-     'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
+  % If sliced is empty (mask SPGR is zero), skip
+  if ~(sum(data_spgr_sl(:)) == 0)
+    
+    % Grab rest of slice data
+    data_ssfp_0_sl   = reshape(data_ssfp_0(:,:,ii,:),   [sizex*sizey length(alpha_ssfp)]);
+    data_ssfp_180_sl = reshape(data_ssfp_180(:,:,ii,:), [sizex*sizey length(alpha_ssfp)]);
+    pd_spgr_sl       = pd_spgr(:,:,ii);
+    pd_ssfp_sl       = pd_ssfp(:,:,ii);
+    t1_sl            = t1(:,:,ii);
+    t2_sl            = t2(:,:,ii);
+    fam_sl           = fam(:,:,ii);
+    omega_sl         = omega(:,:,ii);
+    
+    % Display work in progress
+    disp(['Working on slice #' num2str(ii) ' / ' num2str(nslices)]);
+    
+    % Formulate initial guess vector
+    ig = [t1_sl(:) t2_sl(:) pd_spgr_sl(:) abs(pd_ssfp_sl(:))];
+    
+    diary('off');
+    [fv rnrm] = mcdespot_model_fit(data_spgr_sl, data_ssfp_0_sl, data_ssfp_180_sl, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam_sl(:), omega_sl(:), ig, numThreads, DEBUG);
+    diary('_mcdespot_log.txt');
+    
+    % Reshape outputs
+    mcd_fv(:,:,ii,:)   = reshape(fv,   [sizex sizey 1 6]);
+    mcd_rnrm(:,:,ii)   = reshape(rnrm, [sizex sizey 1  ]);
+    
+    % Display the time the slice finished
+    disp(['Slice Complete: ' datetime_stamp()]);
+
+    % Save data after each slice, in case of a crash
+    save(['mcdespot_run' num2str(status.mcdespot,'%02.0f')], 'mcd_fv', 'mcd_rnrm');
+
+    save('_mcdespot_settings', 'tr_spgr', 'tr_irspgr', 'tr_ssfp', 'flags', ...
+       'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
+       'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
+    
+  else
+    % Slice is all zeros
+    mcd_fv(:,:,ii,:)   = zeros([sizex sizey 1 6]);
+    mcd_rnrm(:,:,ii)   = zeros([sizex sizey 1  ]);
+    
+    % Display the time the slice finished
+    disp(['Skipping empty slice #' num2str(ii) ' / ' num2str(nslices)]);
+  end
     
 end
 
 % Save end run time
-time.mcdespot_end = strvcat(time.mcdespot_end, datetime()); %#ok<VCAT>
-disp(['Processing Run Complete: ' datetime()]);
+time.mcdespot_end = strvcat(time.mcdespot_end, datetime_stamp()); %#ok<DSTRVCT>
+disp(['Processing Run Complete: ' datetime_stamp()]);
 
 % Text message notification
-send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' datetime()]);
+send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' datetime_stamp()]);
 
 %% Write out to NIfTI
 

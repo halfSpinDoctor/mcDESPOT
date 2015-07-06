@@ -27,7 +27,8 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v5.0 5-Nov-2012
+% University of Oxford
+% v5.1 6-Jul-2015
 %
 % Chagelog:
 %        v1.0 20-Oct-2009 - Initial Relase
@@ -46,9 +47,11 @@
 %        V4.5  5-Nov-2012 - Updated to work with new cpMCDESPOT_residuals
 %                           re-factoring (Nov-2012)
 %        V5.0 10-Nov-2013 - Update based on Deoni et al. updated fitting methods.
+%        V5.1  6-Jul-2015 - Update to do continuous SSFP weightings. Add
+%                           external var for number of threads (Jul-2015)
 %        (Note: 3/3/2014 changed VER numbers to match other funcs)
 
-function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, debug)
+function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, numThreads, debug)
 
 tic;
 
@@ -138,22 +141,22 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     end
     
     % Compute residuals via CPU
-    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1);
-    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1);
-    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1);
+    resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1, numThreads);
+    resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1, numThreads);
+    resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1, numThreads);
     
-    % Weight residuals smoothly based on off-resonance map supplied from DESPOT2-HFI
+    % Weight residuals smoothly based on off-resonance map supplied from DESPOT2-FM
     PSI    = tr_ssfp * vox_omega * 2*pi;
     WT_180 = sin((180*DEG_TO_RAD + PSI)./2).^2;
     WT_000 = sin((  0*DEG_TO_RAD + PSI)./2).^2;
     
     res    = SPGRWEIGHT * resSPGR + WT_180 * resSSFP_180 + WT_000 * resSSFP_0;
     
-%    % Discrete Weights
-%
-%    % Compute residual based on weighting
-%    off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
-
+%     % Discrete Weights
+% 
+%     % Compute residual based on weighting
+%     off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
+% 
 %     % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
 % 
 %     if vox_omega < off_res_range * 0.33
@@ -238,11 +241,11 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   %% OPTIMIZATION STEP II: Use guess as initial guess for local optim (fminsearch)
   
   % Gaussian Contraction + FMINSEARCH
-  [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
+  % [x rnrm(ii)]   = fminsearch(@mcdespot_model, guess(:,1)', optim);
 
-%   % Gaussian Contraction Only
-%   x = guess(:,1)';
-%   rnrm(ii) = res(1);
+  % Gaussian Contraction Only
+  x = guess(:,1)';
+  rnrm(ii) = res(1);
   
   % Output vector is fv
   fv(ii, :)   = x;
