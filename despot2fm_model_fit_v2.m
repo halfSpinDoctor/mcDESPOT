@@ -194,7 +194,7 @@ omega(voxidx) = omega_pf;
 fprintf('First 2 iterations complete...applying median filter...');
 
 % Apply 3x3x3 3D median filter to Omega estimate
-omega_mf5     = medfilt3(omega, [5 5 5]);
+omega_mf5     = medfilt3(omega, [7 7 7]);
 
 fprintf('median filtering complete...running last iteration...');
 
