@@ -12,7 +12,9 @@
 %
 % Samuel A. Hurley
 % Pouria Mossahebi
-% v3.3 28-Feb-2012
+% University of Wisconsin
+% University of Oxford
+% v5.0 7 Jul 2015
 %
 % Changelog:
 %     v1.0 - Based off of run_mcdespot (Mar-2010)
@@ -20,6 +22,7 @@
 %     v3.1 - Eliminated stuff. (May-2010)
 %     v3.2 - Supports datasets w/o IR-SPGR (ex: AFI acquisitions or Vnmr)  (Dec 2011)
 %     v3.3 - Updated to be compatible with afi_flag & ideal_flag options   (Feb-2012)
+%     v5.0 - Remove 'toc' at end. Update version number to match release   (Jul-2015)
 
 function [img alpha_spgr alpha_ssfp] = load_mcdespot_series %#ok<STOUT>
 tic;
@@ -97,5 +100,4 @@ if ideal_flag == 1
   progressbar(1);
 end
 
-toc;
 disp('Done!');

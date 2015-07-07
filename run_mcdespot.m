@@ -59,7 +59,6 @@ NOTIFY_EMAIL = 'shurley@fmrib.ox.ac.uk';            % Sam's FMRIB Mail
 
 % Number of threads for parallelization of mcDESPOT residuals
 numThreads = feature('NumCores');
-numThreads = 4;
 
 % Builtin options
 DEBUG  = 0;           % Plot data fit quality
