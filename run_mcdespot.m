@@ -1,9 +1,9 @@
-% FUNCTION [mcd_fv mcd_rnrm] = run_mcdespot(slices)
+% FUNCTION [mcd_fv mcd_rnrm] = run_mcdespot()
 %
 % FUNCTION to automatie call to mcDESPOT fitting routine.
 %
 % Inputs:
-%    EXPLICIT: slices - choose which slices to process
+%    EXPLICIT: None
 %    IMPLICIT: Start in same directory as _mcdespot_settings.mat
 %              Have already run brain mask, T1, and FAM steps (despot1)
 %
@@ -20,7 +20,7 @@
 % Samuel A. Hurley
 % University of Wisconsin
 % University of Oxford
-% v5.3 6-Jul-2015
+% v5.5   7-Jul-2015
 %
 % Changelog:
 %     v1.0 - added options for coregistered data               (Jan-2010)
@@ -41,19 +41,25 @@
 %     v5.3 - Cleanup multislice processing to skip slices without masked signal.
 %            Change mcdespot_model_fit call to include number of pthreads to use
 %            (Jul-2015)
+%     v5.4 - Setup to resume processing if a run aborted midway. Cleanup unnecessary code (Jul-2015)
 
-function [] = run_mcdespot(slices)
+function [] = run_mcdespot()
+
+%% Initalization
 tic;
 
 % Initiate Diary
 diary('_mcdespot_log.txt');
-clc;
 
-VER = 5.3;
-VERDATE = '6-Jul-2015';
+VER = 5.4;
+VERDATE = '7-Jul-2015';
 
 % E-mail Notification When Processing is Complete
-NOTIFY_EMAIL = 'shurley@wisc.edu';            % Sam's Wiscmail
+NOTIFY_EMAIL = 'shurley@fmrib.ox.ac.uk';            % Sam's FMRIB Mail
+
+% Number of threads for parallelization of mcDESPOT residuals
+numThreads = feature('NumCores');
+numThreads = 4;
 
 % Builtin options
 DEBUG  = 0;           % Plot data fit quality
@@ -64,55 +70,41 @@ disp('=== cpMCDESPOT - Multicomponent Relaxomtery Analysis ===');
 disp('     mcDESPOT Script       (run_mcdespot)'               );
 disp('     Samuel A. Hurley      shurley@wisc.edu'             );
 disp('     Pouria Mossahebi      mossahebi@wisc.edu'           );
-disp(['     Version ' num2str(VER, '%01.1f') '         ' VERDATE]);
+disp(['     Version ' num2str(VER, '%01.1f') '           ' VERDATE]);
 disp('     FOR USE ONLY AT UNIVERSITY OF WISCONSIN.'           );
 disp('========================================================');
 
 % Load in mcdespot settings file
 load _mcdespot_settings
 
-% Define multiComponant location
-dir.MCDESPOT = './multiComponent/';
-mkdir(dir.MCDESPOT);
-
 % Check if the processing was run before
-if isfield(status, 'mcdespot') && status.mcdespot > 0 %#ok<NODEF>
-  status.mcdespot        = status.mcdespot + 1;
+if isfield(status, 'mcdespot') && status.mcdespot > 0
+  % Do logic to finish current run vs. start new run later down.
+  
 else
-  status.mcdespot = 1;
-  status.comment  = [];
+  % First processing run - define fields
+  status.mcdespot   = 1;
+  status.nsliceproc = 0;
   time.mcdespot_start = [];
   time.mcdespot_end   = [];
+  dir.MCDESPOT = './multiComponent/';
 end
 
-disp(['Processing Run #' num2str(status.mcdespot)]);
-
-% Comment for this run
-% comment = inputdlg('Enter a comment for this run:');
-comment = ' ';
-
-% Starting time for processing
-time.mcdespot_start = strvcat(time.mcdespot_start, datetime_stamp());
+% Starting run time
+time.mcdespot_start = strvcat(time.mcdespot_start, datetime_stamp()); %#ok<DSTRVCT>
 disp(['Processing Run Started: ' datetime_stamp()]);
 
-% Load mcDESPOT Images
-% load_mcdespot_series will choose the coreg data, if it exists
-img = load_mcdespot_series();
+% Note: Don't save settings file unless at least 1 slice has been processed
 
-% Grab the necessary data
-spgr     = img.spgr;
-ssfp_0   = img.ssfp_0;
-ssfp_180 = img.ssfp_180;
-
-% Free up memory
-img = []; %#ok<NASGU>
+%% Data Loading
 
 % Try to load the T1 and flip angle map, if they exist
-if isfield(status, 'despot1') && status.despot1 == 1
+if isfield(status, 'despot1') && status.despot1 == 1 %#ok<*NODEF>
   % Load the t1 map
   pd_spgr = load_nifti([dir.DESPOT1 'DESPOT1-PD.nii']);
   t1      = load_nifti([dir.DESPOT1 'DESPOT1-T1.nii']);
   fam     = load_nifti([dir.DESPOT1 'DESPOT1-FAM.nii']);
+  disp('DESPOT1 data loaded.');
 else
   error('Must run DESPOT1-HIFI first to obtain FAM and T1 map');
 end
@@ -123,52 +115,41 @@ if isfield(status, 'despot2') && status.despot2 == 1
   pd_ssfp = load_nifti([dir.DESPOT1 'DESPOT2-PD.nii']);
   t2      = load_nifti([dir.DESPOT1 'DESPOT2-T2.nii']);
   omega   = load_nifti([dir.DESPOT1 'DESPOT2-Omega.nii']);
+  disp('DESPOT2 data loaded.');
 else
   error('Must run DESPOT2-FM first to obtain Omega and T2 map');
 end
+
+% Load MR Data. Will automatically choose coreg data, if it exists
+img = load_mcdespot_series();
+
+spgr     = img.spgr;
+ssfp_0   = img.ssfp_0;
+ssfp_180 = img.ssfp_180;
+clear img;
 
 % Try to load the mask, if it exists
 if isfield(status, 'mask') && status.mask == 1
   % Load the mask
   mask = load_nifti([dir.MASK status.maskname]);
-  disp(['Using user-supplied mask.']);
+  disp(['User-supplied mask loaded.']);
 else
   % Threshold above 0
   mask = spgr(:,:,:,1) > 0;
   disp('Using threshold mask.');
 end
 
-% Mask data (SPGR Only)
+% Apply mask to SPGR data
 dataSize = size(spgr);
 spgr     = spgr     .* repmat(mask, [1 1 1 dataSize(4)]);
 
-% Normalize data 
-spgr     = spgr     ./ status.despot1_signalScale;
-ssfp_0   = ssfp_0   ./ status.despot2_signalScale;
-ssfp_180 = ssfp_180 ./ status.despot2_signalScale;
-
-% Check if slices field was specified
-if ~check_var('slices')
-  slices = 1:size(spgr,3);
-  
-end
-
-% Select slices for all maps
-data_spgr = spgr(:,:,slices,:);
-data_ssfp_0 = ssfp_0(:,:,slices,:);
-data_ssfp_180 = ssfp_180(:,:,slices,:);
-
-pd_spgr = pd_spgr(:,:,slices);
-pd_ssfp = pd_ssfp(:,:,slices);
-t1      = t1(:,:,slices);
-t2      = t2(:,:,slices);
-fam     = fam(:,:,slices);
-omega   = omega(:,:,slices);
-
-% Clear unused vars
+% Rescale data 
+data_spgr     = spgr     ./ status.despot1_signalScale;
+data_ssfp_0   = ssfp_0   ./ status.despot2_signalScale;
+data_ssfp_180 = ssfp_180 ./ status.despot2_signalScale;
 clear spgr ssfp_0 ssfp_180;
 
-% Smooth data
+% Smooth data, if option is selected
 if SMOOTH == 1
   fprintf('Smooth Data /w sigma = 2 gaussian (5x5 kernel)...');
   fprintf('SPGR...');
@@ -180,31 +161,57 @@ if SMOOTH == 1
   disp('done.');
 end
 
-% Display masked slices that will be used for processing
-% imgsc(data_spgr(:,:,:,end));
-% title 'Images to Process';
-
-%% Save the run status before processing begins
-status.comment                     = 'Standard mcDESPOT Processing';
-status.nsliceproc(status.mcdespot) = 0;
-
 % Determine array size
-sizex   = size(data_spgr, 1);
-sizey   = size(data_spgr, 2);
-nslices = size(data_spgr, 3);
+sizex   = dataSize(1);
+sizey   = dataSize(2);
+nslices = dataSize(3);
 
-% Create Output Matrix
+
+%% Resume Processing, if Previous Run Was Incomplete
+
+% Allocate output matrix
 mcd_fv   = zeros([sizex sizey nslices 6]);
 mcd_rnrm = zeros([sizex sizey nslices  ]);
 
-%% Determine number of threads for parallel processing of mcDESPOT residuals
-numThreads = feature('NumCores');
-% numThreads = 4; % Force 4 to be used
-
-%% Loop Over Slices, so if it crashes we don't loose all the data
-for ii = 1:nslices
+% Check if previous processing run is complete
+if status.nsliceproc(status.mcdespot) == 0
+  % Run has not started yet. Do current run
+  startSlice = 1;
+  disp(['Starting mcDESPOT processing run #' num2str(status.mcdespot)]);
   
-  % Grab slice data
+elseif status.nsliceproc(status.mcdespot) < nslices
+  % Last run did not finish. Try to resume current run.
+  
+  % Load current data
+  if exist(['mcdespot_run' num2str(status.mcdespot, '%02.0f') '.mat'], 'file');
+    % Load mcd_fv and mcd_rnrm from saved file
+    load(['mcdespot_run' num2str(status.mcdespot, '%02.0f') '.mat']);
+    
+    startSlice = status.nsliceproc(status.mcdespot) + 1;
+    disp(['Resuming mcDESPOT processing run #' num2str(status.mcdespot) ' from slice #' num2str(startSlice)]);
+    
+  else
+    % Can't find saved data, start from beginning
+    status.nsliceproc(status.mcdespot) = 0;
+    startSlice = 1;
+    disp('Unable to load saved intermediate data file.');
+    disp(['Restarting mcDESPOT processing run #' num2str(status.mcdespot) ' from beginning.']);
+    
+  end
+  
+else
+  % Last run was fully finished. Start a new run from the beginning.
+  status.mcdespot = status.mcdespot  + 1;  % Increment counter
+  status.nsliceproc(status.mcdespot) = 0; % Make new column in slice counter
+  startSlice = 1; % Start at 1st slice
+  disp(['Starting mcDESPOT processing run #' num2str(status.mcdespot)]);
+end
+
+
+%% Loop Over Slices. Save data after each slice in case processing is aborted midway
+for ii = startSlice:nslices
+  
+  % Grab the masked spgr slice data
   data_spgr_sl     = reshape(data_spgr(:,:,ii,:),     [sizex*sizey length(alpha_spgr)]);
   
   % If sliced is empty (mask SPGR is zero), skip
@@ -236,33 +243,36 @@ for ii = 1:nslices
     
     % Display the time the slice finished
     disp(['Slice Complete: ' datetime_stamp()]);
-
+    % Increment the nsliceproc counter
+    status.nsliceproc(status.mcdespot) = ii;
+    
     % Save data after each slice, in case of a crash
     save(['mcdespot_run' num2str(status.mcdespot,'%02.0f')], 'mcd_fv', 'mcd_rnrm');
 
     save('_mcdespot_settings', 'tr_spgr', 'tr_irspgr', 'tr_ssfp', 'flags', ...
-       'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
-       'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
+        'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
+        'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
     
-  else
-    % Slice is all zeros
-    mcd_fv(:,:,ii,:)   = zeros([sizex sizey 1 6]);
-    mcd_rnrm(:,:,ii)   = zeros([sizex sizey 1  ]);
-    
-    % Display the time the slice finished
-    disp(['Skipping empty slice #' num2str(ii) ' / ' num2str(nslices)]);
   end
-    
 end
 
-% Save end run time
+%% Save final information
+
+% End run time
 time.mcdespot_end = strvcat(time.mcdespot_end, datetime_stamp()); %#ok<DSTRVCT>
 disp(['Processing Run Complete: ' datetime_stamp()]);
 
-% Text message notification
-send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run Complete: ' datetime_stamp()]);
+save('_mcdespot_settings', 'tr_spgr', 'tr_irspgr', 'tr_ssfp', 'flags', ...
+     'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
+     'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
 
+% Text message notification
+send_mail_message(NOTIFY_EMAIL, ' run_mcdespot ', ['Processing Run For ' pwd ' Complete At: ' datetime_stamp()]);
+   
 %% Write out to NIfTI
+
+% Make sure multiComponent directory exists
+mkdir(dir.MCDESPOT);
 
 % Reference image (for header info)
 if status.coreg == 0
@@ -279,11 +289,5 @@ img_nifti_to_nifti(mcd_fv(:,:,:,4), refHdr, [dir.MCDESPOT 'mcDESPOT-T2f' ]);
 img_nifti_to_nifti(mcd_fv(:,:,:,5), refHdr, [dir.MCDESPOT 'mcDESPOT-MWF' ]);
 img_nifti_to_nifti(mcd_fv(:,:,:,6), refHdr, [dir.MCDESPOT 'mcDESPOT-Tau' ]);
 img_nifti_to_nifti(mcd_rnrm       , refHdr, [dir.MCDESPOT 'mcDESPOT-Rnrm']);
-
-
-%%
-save('_mcdespot_settings', 'tr_spgr', 'tr_irspgr', 'tr_ssfp', 'flags', ...
-     'alpha_spgr', 'alpha_afi', 'alpha_irspgr', 'alpha_ssfp', 'ti_irspgr', 'npe_irspgr', ...
-     'info_spgr', 'info_irspgr', 'info_afi', 'info_ssfp_0', 'info_ssfp_180', 'info_ideal', 'dir', 'time', 'status');
      
 diary('off');
