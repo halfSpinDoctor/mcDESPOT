@@ -16,7 +16,7 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v3.9 12-Sept-2012
+% v5.0 3-March-2014
 %
 % Revision History
 %    Based on load_mcdespot_data (for waisman data)
