@@ -95,8 +95,10 @@ end
 
 % FLIRT Additional Options
 %   bins 256 is default
-%   searchx/y/z - assumes no more than +/- 5 degree shift
-opts = [' -datatype float  -searchcost mutualinfo -cost corratio -bins 256 -dof 6 -searchrx -2 2' ...
+%   cost corratio is default
+%   search_rx/ry/rz - assumes no more than +/- 2 degree rotation
+%   set to -nosearch in SSFP-0 section
+opts = [' -datatype float  -searchcost corratio -cost corratio -bins 256 -dof 6 -searchrx -2 2' ...
         ' -searchry -2 2 -searchrz -2 2  -coarsesearch 2 -finesearch 1 -interp sinc'];
       
 % If mask already exists, specify as additional option
@@ -208,7 +210,7 @@ end
 % Because they have similar contrast, then coreg all SSFP images to the
 % first SSFP-180 image.
 
-% Reference Image
+% Reference Image - PDw SPGR
 ref = [dir.COREG dir.SPGR 'spgr_01'];
 
 disp('== Coregistration of SSFP-180 ==');
@@ -219,6 +221,7 @@ in  = [dir.BASE dir.SSFP_180 'ssfp_180_01'];
 % Result Filename
 out = [dir.COREG dir.SSFP_180 'ssfp_180_01'];
 
+% Apply init matrix
 eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts]);
 eval(['!fslchfiletype NIFTI ' out]);
 
@@ -242,29 +245,32 @@ end
 %% Coreg 1st SSFP-0
 
 disp('== Coregistration of SSFP-0 Data ==');
-
-% Reference Image
-ref = [dir.COREG dir.SSFP_180 'ssfp_180_' num2str(SSFP_0_REF, '%02.0f')];
-
 ii = 1;
-disp(['--Flip Angle ' num2str(alpha_ssfp(ii), '%02.0f') ' Cycle: 0--']);
+
+% Update Reference Image & Inital Transform to 1st SSFP-180 image
+% Add -nosearch option for SSFP-0 Coreg to prevent large rotations/shifts in banded images
+ref   = [dir.COREG dir.SSFP_180 'ssfp_180_01'];
+xfm   = [dir.COREG dir.SSFP_180 'ssfp_180_01'];
+opts1 = [opts ' -nosearch -init ' xfm '.txt '];
+
+disp(['--Flip Angle ' num2str(alpha_ssfp(1), '%02.0f') ' Cycle: 0--']);
 
 % Source File
 in  = [dir.BASE  dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
 % Result Filename
 out = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str(ii, '%02.0f')];
 
-% Add -init matrix
-opts1 = [opts ' -init ' dir.COREG dir.SSFP_180 'ssfp_180_' num2str(floor(length(alpha_ssfp)/2), '%02.0f') '.txt '];
-
+% Apply init matrix
 eval(['!flirt -in ' in ' -ref ' ref ' -out ' out ' -omat ' out '.txt' opts1]);
 eval(['!fslchfiletype NIFTI  ' out  ]);
 
 %% Coreg Rest of SSFP-0
 
-% Update Reference Image to 1st SSFP-0
-ref   = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str((ii-1), '%02.0f')];
-opts1 = [opts ' -init ' dir.COREG dir.SSFP_0 'ssfp_0_' num2str(1, '%02.0f') '.txt '];
+% Update Reference Image & Initial Transform to 1st SSFP-0
+% Add -nosearch option for SSFP-0 Coreg to prevent large rotations/shifts in low SNR images
+ref   = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str((ii), '%02.0f')];
+xfm   = [dir.COREG dir.SSFP_0 'ssfp_0_' num2str((ii), '%02.0f')];
+opts1 = [opts ' -nosearch -init ' xfm '.txt '];
 
 for ii = 2:length(alpha_ssfp)
   
