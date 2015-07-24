@@ -42,6 +42,7 @@
 %            Change mcdespot_model_fit call to include number of pthreads to use
 %            (Jul-2015)
 %     v5.4 - Setup to resume processing if a run aborted midway. Cleanup unnecessary code (Jul-2015)
+%     v5.5 - Cleanup resume proccessing feature. Add SSFP Weighting outputs. (Jul-2015)
 
 function [] = run_mcdespot()
 
@@ -57,15 +58,19 @@ VERDATE = '7-Jul-2015';
 % E-mail Notification When Processing is Complete
 NOTIFY_EMAIL = 'shurley@fmrib.ox.ac.uk';            % Sam's FMRIB Mail
 
-% Number of threads for parallelization of mcDESPOT residuals
+% Number of threads for parallelization of mcDESPOT residuals. Max of 8
+% Using more than 8 threads does not provide much more speedup due to mem speed
 numThreads = feature('NumCores');
+if numThreads > 8
+  numThreads = 8;
+end
 
 % Builtin options
 DEBUG  = 0;           % Plot data fit quality
 SMOOTH = 0;           % Smooth data?
 
 % Display banner
-disp('=== cpMCDESPOT - Multicomponent Relaxomtery Analysis ===');
+disp('=== cpMCDESPOT - Multicomponent Relaxometry Analysis ===');
 disp('     mcDESPOT Script       (run_mcdespot)'               );
 disp('     Samuel A. Hurley      shurley@wisc.edu'             );
 disp('     Pouria Mossahebi      mossahebi@wisc.edu'           );
@@ -92,6 +97,9 @@ end
 % Starting run time
 time.mcdespot_start = strvcat(time.mcdespot_start, datetime_stamp()); %#ok<DSTRVCT>
 disp(['Processing Run Started: ' datetime_stamp()]);
+
+% Display number of threads used
+disp(['Running cpMCDESPOT residual calculation with ' num2str(numThreads) ' CPU threads.']);
 
 % Note: Don't save settings file unless at least 1 slice has been processed
 
@@ -170,7 +178,7 @@ nslices = dataSize(3);
 
 % Allocate output matrix
 mcd_fv   = zeros([sizex sizey nslices 6]);
-mcd_rnrm = zeros([sizex sizey nslices  ]);
+mcd_rnrm = zeros([sizex sizey nslices 3]);
 
 % Check if previous processing run is complete
 if status.nsliceproc(status.mcdespot) == 0
@@ -230,7 +238,7 @@ for ii = startSlice:nslices
     disp(['Working on slice #' num2str(ii) ' / ' num2str(nslices)]);
     
     % Formulate initial guess vector
-    ig = [t1_sl(:) t2_sl(:) pd_spgr_sl(:) abs(pd_ssfp_sl(:))];
+    ig = [t1_sl(:) t2_sl(:) pd_spgr_sl(:) pd_ssfp_sl(:)];
     
     diary('off');
     [fv rnrm] = mcdespot_model_fit(data_spgr_sl, data_ssfp_0_sl, data_ssfp_180_sl, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam_sl(:), omega_sl(:), ig, numThreads, DEBUG);
@@ -238,7 +246,7 @@ for ii = startSlice:nslices
     
     % Reshape outputs
     mcd_fv(:,:,ii,:)   = reshape(fv,   [sizex sizey 1 6]);
-    mcd_rnrm(:,:,ii)   = reshape(rnrm, [sizex sizey 1  ]);
+    mcd_rnrm(:,:,ii,:) = reshape(rnrm, [sizex sizey 1 3]);
     
     % Display the time the slice finished
     disp(['Slice Complete: ' datetime_stamp()]);
@@ -256,6 +264,9 @@ for ii = startSlice:nslices
 end
 
 %% Save final information
+
+% Set nslice proc to all slices
+status.nsliceproc(status.mcdespot) = nslices;
 
 % End run time
 time.mcdespot_end = strvcat(time.mcdespot_end, datetime_stamp()); %#ok<DSTRVCT>
@@ -281,12 +292,16 @@ elseif status.coreg == 1
 end
 
 % Save NIfTI
-img_nifti_to_nifti(mcd_fv(:,:,:,1), refHdr, [dir.MCDESPOT 'mcDESPOT-T1m' ]);
-img_nifti_to_nifti(mcd_fv(:,:,:,2), refHdr, [dir.MCDESPOT 'mcDESPOT-T1f' ]);
-img_nifti_to_nifti(mcd_fv(:,:,:,3), refHdr, [dir.MCDESPOT 'mcDESPOT-T2m' ]);
-img_nifti_to_nifti(mcd_fv(:,:,:,4), refHdr, [dir.MCDESPOT 'mcDESPOT-T2f' ]);
-img_nifti_to_nifti(mcd_fv(:,:,:,5), refHdr, [dir.MCDESPOT 'mcDESPOT-MWF' ]);
-img_nifti_to_nifti(mcd_fv(:,:,:,6), refHdr, [dir.MCDESPOT 'mcDESPOT-Tau' ]);
-img_nifti_to_nifti(mcd_rnrm       , refHdr, [dir.MCDESPOT 'mcDESPOT-Rnrm']);
+img_nifti_to_nifti(mcd_fv(:,:,:,1),   refHdr, [dir.MCDESPOT 'mcDESPOT-T1m' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,2),   refHdr, [dir.MCDESPOT 'mcDESPOT-T1f' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,3),   refHdr, [dir.MCDESPOT 'mcDESPOT-T2m' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,4),   refHdr, [dir.MCDESPOT 'mcDESPOT-T2f' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,5),   refHdr, [dir.MCDESPOT 'mcDESPOT-MWF' ]);
+img_nifti_to_nifti(mcd_fv(:,:,:,6),   refHdr, [dir.MCDESPOT 'mcDESPOT-Tau' ]);
+img_nifti_to_nifti(mcd_rnrm(:,:,:,1), refHdr, [dir.MCDESPOT 'mcDESPOT-Rnrm']);
+
+% Debug: 
+img_nifti_to_nifti(mcd_rnrm(:,:,:,2), refHdr, [dir.MCDESPOT 'CALIB-WT_0'   ]);
+img_nifti_to_nifti(mcd_rnrm(:,:,:,3), refHdr, [dir.MCDESPOT 'CALIB-WT_180' ]);
      
 diary('off');

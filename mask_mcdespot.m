@@ -12,7 +12,7 @@
 %    Implicit: New directory called maskData
 %
 % Samuel A. Hurley
-% v3.3 28-Feb-2012
+% v5.0 Jun-2014
 %
 % Changelog:
 %     v3.0 - Initial Version (using v3.0 to match other mcDESPOT commands)
@@ -57,7 +57,7 @@ disp(['========================================================']);
 load _mcdespot_settings;
 
 % Starting time for coreg data
-time.mask_start = datetime();
+time.mask_start = datetime_stamp();
 disp(['Masking/BET Started: ' time.mask_start]);
 
 % Define mask location
@@ -127,7 +127,7 @@ axis off;
 saveas(gcf, [dir.MASK 'Mask.tif']);
 
 % Done!
-time.mask_end = datetime();
+time.mask_end = datetime_stamp();
 disp(['Masking/BET Complete: ' time.mask_end]);
 
 % Coreg Flag

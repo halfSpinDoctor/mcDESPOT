@@ -1,4 +1,4 @@
-% FUNCTION [img alpha_spgr alpha_ssfp] = load_mcdespot_series
+% FUNCTION [img alpha_spgr alpha_ssfp] = load_mcdespot_series(mcdespot_settings)
 %
 % FUNCTION to automate loading of mcDESPOT raw images into Matlab variables
 %
@@ -14,7 +14,7 @@
 % Pouria Mossahebi
 % University of Wisconsin
 % University of Oxford
-% v5.0 7 Jul 2015
+% v5.0 7-Jul-2015
 %
 % Changelog:
 %     v1.0 - Based off of run_mcdespot (Mar-2010)
@@ -24,11 +24,15 @@
 %     v3.3 - Updated to be compatible with afi_flag & ideal_flag options   (Feb-2012)
 %     v5.0 - Remove 'toc' at end. Update version number to match release   (Jul-2015)
 
-function [img alpha_spgr alpha_ssfp] = load_mcdespot_series %#ok<STOUT>
+function [img alpha_spgr alpha_ssfp] = load_mcdespot_series(mcdespot_settings) %#ok<STOUT>
 tic;
 
 % Load in mcdespot settings file
-load _mcdespot_settings;
+if ~exist('mcdespot_settings', 'var')
+  load('_mcdespot_settings');
+else
+  load(mcdespot_settings);
+end
 
 % Check for flags
 if ~isfield(flags, 'afi')

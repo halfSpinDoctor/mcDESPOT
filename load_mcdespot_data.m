@@ -82,7 +82,7 @@ fprintf('On host:      ');
 !hostname
 
 % Starting time for loading data
-time.load_start = datetime();
+time.load_start = datetime_stamp();
 disp(['Loading Started: ' time.load_start]);
 
 %% O. Acquisition Settings
@@ -483,7 +483,7 @@ end
 
 
 %% V Ending time for loading data
-time.load_end = datetime();
+time.load_end = datetime_stamp();
 disp(['Loading Complete: ' time.load_end]);
 
 %% VI Save settings for later mcDESPOT processing
