@@ -14,6 +14,8 @@
 %          fam                    - relative error in B1
 %          omega                  - off-resonance of B0 in Hz
 %          ig                     - Np x 4 initial guess variable [t1 t2 pd_spgr pd_ssfp]
+%          numThreads             - Number of parallel threads used to compute
+%                                   residuals on CPU (cpMCDESPOT_residuals_SAH)
 %          debug                  - flag to print debugging information
 %                                     0: Debugging off
 %                                     1: Show final estimate in a table
@@ -22,13 +24,13 @@
 %                                     4: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
 %
 % Outputs:
-%           fv [Np x 7] = [T1m T1f T2m T2f Fm Tau_m Omega]
+%           fv [Np x 1] = [T1m T1f T2m T2f Fm Tau_m]
 %           rnrm        - residual norm
 %
 % Samuel A. Hurley
 % University of Wisconsin
 % University of Oxford
-% v5.1 6-Jul-2015
+% v5.2 10-Jul-2015
 %
 % Chagelog:
 %        v1.0 20-Oct-2009 - Initial Relase
@@ -50,6 +52,12 @@
 %        V5.1  6-Jul-2015 - Update to do continuous SSFP weightings. Add
 %                           external var for number of threads (Jul-2015)
 %        (Note: 3/3/2014 changed VER numbers to match other funcs)
+%        V5.2 10-Jul-2015 - Update header info to reflect algorithm changes.
+%                           Implemented TCW smootly varying SSFP residual
+%                           weights. Updated header documentation to show fv
+%                           output vector has 6 elements, not 7.
+%                           Added input to specify number of threads (determined
+%                           in run_mcdespot from feature('NumCores') MATLAB func
 
 function [fv rnrm] = mcdespot_model_fit(data_spgr, data_ssfp_0, data_ssfp_180, alpha_spgr, alpha_ssfp, tr_spgr, tr_ssfp, fam, omega, ig, numThreads, debug)
 
@@ -65,9 +73,9 @@ NUM_SAMPLES            = 100;  % Must be 128 to match #threads/kernel on GPU
 
 DEG_TO_RAD             = pi/180;
 
-% SIGNALSCALE = 1000;  % Hard-coded into C code
-% MAX_ALPHA_SPGR = 40; % Hard-coded into C code 
-% MAX_ALPHA_SSFP = 40; % Hard-coded into C code
+% SIGNALSCALE = 1000;    % Hard-coded into C code
+% MAX_ALPHA_SPGR = 40;   % Hard-coded into C code 
+% MAX_ALPHA_SSFP = 40;   % Hard-coded into C code
 
 % Weighting for residuals
 SPGRWEIGHT      = 1.05; % 2.75
@@ -90,16 +98,14 @@ alpha_ssfp = fam * alpha_ssfp;
 
 % Preallocate outputs
 fv   = zeros([size(data_spgr, 1)  6]);
-rnrm = zeros([size(data_spgr, 1)  1]);
+rnrm = zeros([size(data_spgr, 1)  3]); % Include SSFP weights in RNRM output
 
 % Determine number of points
 npts = size(find(~(sum(data_spgr, 2) == 0)),1);
 pt   = 0;
 
 if debug == 0
-  fprintf('mcDESPOT Fitting:');
-else
-  disp(   'mcDESPOT Fitting:');
+  fprintf('mcDESPOT Fitting:     ');
 end
 
 % Initialize Random Seed
@@ -129,6 +135,11 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   
   % Set the B0 to the DESPOT2-FM Omega
   vox_omega = omega(ii);
+  
+  % Set residual weights smoothly based on off-resonance map supplied from DESPOT2-FM
+  PSI    = tr_ssfp * vox_omega * 2*pi;
+  WT_000 = sin((  0*DEG_TO_RAD + PSI)./2).^2;
+  WT_180 = sin((180*DEG_TO_RAD + PSI)./2).^2;
 
   %% Iterate over contraction steps
   for jj = 1:CONTRACTION_STEPS            % Loop for iterations
@@ -144,34 +155,9 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     resSPGR     = cpMCDESPOT_residuals_SAH(x', vox_omega,  -1, vox_data_spgr,     vox_alpha_spgr, tr_spgr, 1, numThreads);
     resSSFP_0   = cpMCDESPOT_residuals_SAH(x', vox_omega,   0, vox_data_ssfp_0,   vox_alpha_ssfp, tr_ssfp, 1, numThreads);
     resSSFP_180 = cpMCDESPOT_residuals_SAH(x', vox_omega, 180, vox_data_ssfp_180, vox_alpha_ssfp, tr_ssfp, 1, numThreads);
-    
-    % Weight residuals smoothly based on off-resonance map supplied from DESPOT2-FM
-    PSI    = tr_ssfp * vox_omega * 2*pi;
-    WT_180 = sin((180*DEG_TO_RAD + PSI)./2).^2;
-    WT_000 = sin((  0*DEG_TO_RAD + PSI)./2).^2;
-    
-    res    = SPGRWEIGHT * resSPGR + WT_180 * resSSFP_180 + WT_000 * resSSFP_0;
-    
-%     % Discrete Weights
-% 
-%     % Compute residual based on weighting
-%     off_res_range = 1/2/tr_ssfp; % Range of 0->off_res_range of omega values
-% 
-%     % |0%| -- 180 Only -- |33%| -- 180>0 -- |50%| -- 0>180 -- |66%| -- 0 Only -- |1/(2*omega)|
-% 
-%     if vox_omega < off_res_range * 0.33
-%       % Use SSFP-180 Only (SSFP-0 is zero signal)
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_180;
-%     elseif vox_omega < off_res_range * 0.50
-%       % Use both, weight SSFP-180 Higher
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_180 + SSFPWEIGHT_LOW*resSSFP_0;
-%     elseif vox_omega < off_res_range * 0.66
-%       % Use both, weight SSFP-0 Higher
-%       res = SPGRWEIGHT*resSPGR + SSFPWEIGHT_HIGH*resSSFP_0   + SSFPWEIGHT_LOW*resSSFP_180;
-%     else
-%       % Use only SSFP-0, since SS 0FP-180 is almost zero in this region
-%       res = SPGRWEIGHT*resSPGR + (SSFPWEIGHT_HIGH+SSFPWEIGHT_LOW)*resSSFP_0;
-%     end
+
+    % Combine weighted residuals - SQRT SOS
+    res    = SPGRWEIGHT.^2 * resSPGR + WT_180.^2 * resSSFP_180 + WT_000.^2 * resSSFP_0;
     
     % DEBUG 3: Show residual vectors
     if debug == 3
@@ -182,48 +168,69 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
       pause(.5);
     end
 
-
+    % Sort residuals low->high
+    [res idx] = sort(res);
+    
     % DEBUG 4: Make plots of res vs. t1_f/s, t2_f/2, MWF/Omega
+    %          V5.2: Only display the top 20% (1000/5000) to make plotting faster
     if debug == 4
-      scatter(x(:,1), x(:,2), [], res, '+')
-      set(gca, 'clim', [0 .001])
-      xlabel 'T1_m'
-      ylabel 'T1_f'
+      subplot(4,3,3*jj-2);
+      scatter(x(1:1000,1), x(1:1000,2), [], res(1:1000), '+')
+      if jj == 1 || isnan(max(res(1:1000)))
+        % Set scale from 0 -> 1e-3 for 1st ContractionStep
+        set(gca, 'clim', [0 .001])
+      else
+        % Autoscale for subsequent ContractionSteps
+        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
+      end
+      xlabel 'T1_m [s]'
+      ylabel 'T1_f [s]'
       colorbar;
       xlim([0.30 0.65]);
       ylim([0.50 1.50]);
-      pause(.1);
-      print -deps2 -r300
-      eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
-      pause;
+      % pause(.1);
+      % print -deps2 -r300
+      % eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
+      % pause;
       
-      scatter(x(:,3), x(:,4), [], res, '+')
-      set(gca, 'clim', [0 .001])
-      xlabel 'T2_m'
-      ylabel 'T2_f'
+      subplot(4,3,3*jj-1);
+      scatter(x(1:1000,3), x(1:1000,4), [], res(1:1000), '+')
+      if jj == 1 || isnan(max(res(1:1000)))
+        % Set scale from 0 -> 1e-3 for 1st ContractionStep
+        set(gca, 'clim', [0 .001])
+      else
+        % Autoscale for subsequent ContractionSteps
+        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
+      end
+      xlabel 'T2_m [s]'
+      ylabel 'T2_f [s]'
       colorbar;
       xlim([0.001 0.030]);
       ylim([0.050 0.165]);
-      pause(.1);
-      print -deps2 -r300
-      eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
-      pause;
+      % pause(.1);
+      % print -deps2 -r300
+      % eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
+      % pause;
       
-      scatter(x(:,5), x(:,6), [], res, '+')
-      set(gca, 'clim', [0 .001])
+      subplot(4,3,3*jj-0);
+      scatter(x(1:1000,5), x(1:1000,6), [], res(1:1000), '+')
+      if jj == 1 || isnan(max(res(1:1000)))
+        % Set scale from 0 -> 1e-3 for 1st ContractionStep
+        set(gca, 'clim', [0 .001])
+      else
+        % Autoscale for subsequent ContractionSteps
+        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
+      end
       xlabel 'MWF'
-      ylabel 'Omega'
+      ylabel 'Tau [s]'
       colorbar;
       xlim([0.00 0.35]);
       ylim([0.025 0.60]);
-      pause(.1);
-      print -deps2 -r300
-      eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
-      pause;
+      % pause(.1);
+      % print -deps2 -r300
+      % eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
+      % pause;
     end
-
-    % Sort residuals low->high
-    [res idx] = sort(res);
     
     % Do not need to do if on last iteration
     if (jj < CONTRACTION_STEPS)
@@ -245,10 +252,12 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
 
   % Gaussian Contraction Only
   x = guess(:,1)';
-  rnrm(ii) = res(1);
-  
-  % Output vector is fv
+
+  % Output vector fv & residual/weightings
   fv(ii, :)   = x;
+  rnrm(ii, 1) = res(1);
+  rnrm(ii, 2) = WT_000;
+  rnrm(ii, 3) = WT_180;
   
   %% DEBUG INFORMATION
   
@@ -264,17 +273,17 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   
   
   if debug == 2
-    % Setup Figure
-    if ~exist('dbfig', 'var')
-      dbfig = figure;
-    end
+%     % Setup Figure
+%     if ~exist('dbfig', 'var')
+%       dbfig = figure;
+%     end
 
     % Generate simulated curve based on fitting
-    a = 1:70;
+    a = 1:90;
     [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot(fv(ii,1:6), vox_omega, a, tr_spgr, tr_ssfp, Inf);
 
     % Plot actual vs fitted data
-    figure(dbfig);
+%   figure(dbfig);
     plot(vox_alpha_spgr, vox_data_spgr, 'ok', vox_alpha_ssfp, vox_data_ssfp_0, 'or', vox_alpha_ssfp, vox_data_ssfp_180, 'ob', a, s_spgr, '-k', a, s_ssfp_0, '-r', a, s_ssfp_180, '-b');
 
     % Figure captions & Legend
@@ -289,8 +298,10 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
 end % End voxels
 
 % Close progressbar
-progressbar(1);
-toc;
+if debug == 0
+  progressbar(1);
+  toc;
+end
 
 %% ------------------------ Helper Functions Below -------------------------
 

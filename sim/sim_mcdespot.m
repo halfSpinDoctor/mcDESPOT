@@ -18,11 +18,12 @@
 %
 % Samuel A. Hurley
 % University of Wisconsin
-% v1.0 14-Feb-2012
+% v1.1 13-Sep-2015
 %
 % Changelog:
 %       v1.0 Initial Version, based off of sim_mcdespot_c2
 %            Alows for multiple FV vectors to be passed to a single sim_mcdespot call
+%       v1.1 Updated to pass numThreads argument for updated C-code
 
 function [s_spgr s_ssfp_0 s_ssfp_180] = sim_mcdespot(fv, omega, alpha, tr_spgr, tr_ssfp, snr)
 
@@ -34,7 +35,10 @@ s_ssfp_180 = zeros([size(fv,1) length(alpha)]);
 % Loop over flip angles
 for ii = 1:length(alpha)
   % For Sam's c-code, only 3 outputs & FV is now a matrix, not a set of vectors
-  [resSPGR resSSFP_0 resSSFP_180] = cpMCDESPOT_residuals_SAH(fv', omega, 0, 0, 0, alpha(ii), alpha(ii), tr_spgr, tr_ssfp, 1); 
+  resSPGR = cpMCDESPOT_residuals_SAH(fv', omega,   -1, 0, alpha(ii), tr_spgr,1 , 1);
+  resSSFP_0 = cpMCDESPOT_residuals_SAH(fv', omega,    0, 0, alpha(ii), tr_ssfp,1 , 1);
+  resSSFP_180 = cpMCDESPOT_residuals_SAH(fv', omega,  180, 0, alpha(ii), tr_ssfp,1 , 1);
+  
   % Extract signals from the residual
   s_spgr(:, ii) = sqrt(resSPGR);
   s_ssfp_0(:, ii) = sqrt(resSSFP_0);
