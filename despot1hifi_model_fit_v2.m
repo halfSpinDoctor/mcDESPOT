@@ -41,7 +41,7 @@ function [pd r1 fam rnrm] = despot1hifi_model_fit_v2(data, alpha, tr, data_ir, a
 
 tic;
 
-% OO. Optomization settings
+% OO. Optimisation settings
 % Nelder-Mead Downhill Simplex (fminsearch)
 optim=optimset('fminsearch');
 optim.TolFun = 1e-4;
@@ -54,13 +54,13 @@ optim.Display = 'off';
 % optim.Display = 'off';
 
 % O. Constants
-% Seans 3.0T PSD -- MODE 1
+% Seans 3.0T PSD -- MODE 1: Siemens z-PE (TurboFLASH) ordering
 % TI_SCALE       = 0.84;
 % PD_SCALE       = 0.975;   % SD - Scale of PD for IR-SPGR rel to SPGR
 % READOUT_PULSES = npe + 2;
 % EFF            = -1 + cos(0.97 * pi);    % Inversion effiency (fixed)
 
-% Seans 3.0T PSD -- MODE2
+% Seans 3.0T PSD -- MODE 2: GEHC 1/2 k-space plane (BRAVO) ordering
 TI_SCALE       = 0.90;
 PD_SCALE       = 0.975;                  % SD - Scale of PD for IR-SPGR rel to SPGR
 READOUT_PULSES = npe/2 + 2;
@@ -156,7 +156,7 @@ end
 
 % Get non-zero voxels
 voxidx = find(~(sum(data, 2) == 0))';
-parfor_progress(length(voxidx));
+% parfor_progress(length(voxidx));
 
 parfor ii = 1:length(voxidx)
   
@@ -188,7 +188,7 @@ parfor ii = 1:length(voxidx)
   rnrm_pf(ii) = res;
   
   % Update parfor progressbar
-  parfor_progress;
+  % parfor_progress;
   
 %   % PLOT FOR DEBUGGING FINAL FIT RESULT
 %   <<REMOVED>>
@@ -196,7 +196,7 @@ parfor ii = 1:length(voxidx)
 end
 
 % Close parfor progress bar
-parfor_progress(0);
+% parfor_progress(0);
 
 % disp('Yarr');
 
