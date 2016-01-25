@@ -176,18 +176,19 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
     if debug == 4
       subplot(4,3,3*jj-2);
       scatter(x(1:1000,1), x(1:1000,2), [], res(1:1000), '+')
-      if jj == 1 || isnan(max(res(1:1000)))
+%       if jj == 1 || isnan(max(res(1:1000)))
         % Set scale from 0 -> 1e-3 for 1st ContractionStep
-        set(gca, 'clim', [0 .001])
-      else
-        % Autoscale for subsequent ContractionSteps
-        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
-      end
+        set(gca, 'clim', [0.0001 .0005])
+%       else
+%         % Autoscale for subsequent ContractionSteps
+%         set(gca, 'clim', [0 1*max(res(1:1000))]);
+%       end
       xlabel 'T1_m [s]'
       ylabel 'T1_f [s]'
       colorbar;
       xlim([0.30 0.65]);
       ylim([0.50 1.50]);
+      
       % pause(.1);
       % print -deps2 -r300
       % eval(['!mv figure1.eps FIG_01_' num2str(jj) '.eps']);
@@ -195,18 +196,19 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
       
       subplot(4,3,3*jj-1);
       scatter(x(1:1000,3), x(1:1000,4), [], res(1:1000), '+')
-      if jj == 1 || isnan(max(res(1:1000)))
+%       if jj == 1 || isnan(max(res(1:1000)))
         % Set scale from 0 -> 1e-3 for 1st ContractionStep
-        set(gca, 'clim', [0 .001])
-      else
-        % Autoscale for subsequent ContractionSteps
-        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
-      end
+        set(gca, 'clim', [0.0001 .0005])
+%       else
+%         % Autoscale for subsequent ContractionSteps
+%         set(gca, 'clim', [0 1*max(res(1:1000))]);
+%       end
       xlabel 'T2_m [s]'
       ylabel 'T2_f [s]'
       colorbar;
       xlim([0.001 0.030]);
       ylim([0.050 0.165]);
+      
       % pause(.1);
       % print -deps2 -r300
       % eval(['!mv figure1.eps FIG_02_' num2str(jj) '.eps']);
@@ -214,18 +216,19 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
       
       subplot(4,3,3*jj-0);
       scatter(x(1:1000,5), x(1:1000,6), [], res(1:1000), '+')
-      if jj == 1 || isnan(max(res(1:1000)))
+%       if jj == 1 || isnan(max(res(1:1000)))
         % Set scale from 0 -> 1e-3 for 1st ContractionStep
-        set(gca, 'clim', [0 .001])
-      else
-        % Autoscale for subsequent ContractionSteps
-        set(gca, 'clim', [0 1.2*max(res(1:1000))]);
-      end
+        set(gca, 'clim', [0.0001 .0005])
+%       else
+%         % Autoscale for subsequent ContractionSteps
+%         set(gca, 'clim', [0 1*max(res(1:1000))]);
+%       end
       xlabel 'MWF'
       ylabel 'Tau [s]'
       colorbar;
       xlim([0.00 0.35]);
       ylim([0.025 0.60]);
+      
       % pause(.1);
       % print -deps2 -r300
       % eval(['!mv figure1.eps FIG_03_' num2str(jj) '.eps']);
@@ -296,6 +299,7 @@ for ii = find(~(sum(data_spgr, 2) == 0))'
   end
 
 end % End voxels
+
 
 % Close progressbar
 if debug == 0
